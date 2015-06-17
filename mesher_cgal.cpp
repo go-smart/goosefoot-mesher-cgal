@@ -46,10 +46,11 @@
 #include <CGAL/make_mesh_3.h>
 #include <CGAL/refine_mesh_3.h>
 
-#include <CGAL/Mesh_3/Labeled_mesh_domain_3.h>
+#include "Signed_mesh_domain_3.h"
 // IO
 #include <CGAL/IO/Polyhedron_iostream.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
+#include <CGAL/utils_classes.h>
 
 // surface mesh
 #include <CGAL/Polyhedron_3.h>
@@ -225,21 +226,6 @@ public:
         return retval;
     }
 
-    int save(std::string& filename) {
-        //unstructuredGrid->SetPoints(points);
-        //unstructuredGrid->GetPointData()->AddArray(floatArray);
-//        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer =
-//          vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-//        writer->SetFileName(filename.c_str());
-//#if VTK_MAJOR_VERSION >= 6
-//        writer->SetInputData(unstructuredGrid);
-//#else
-//        writer->SetInput(unstructuredGrid);
-//#endif
-//        writer->Write();
-		return 0;
-	}
-
 private:
     const P3* centre_;
     float radius_;
@@ -264,6 +250,7 @@ private:
   // Map to store field values
   int minx, miny, minz, nx, ny, nz;
   FT length_scale;
+  CGAL::Min<FT> min_;
   
 public:
   /// Constructor
@@ -273,7 +260,7 @@ public:
                         tree_(tree), near_cl_(near_cl), far_cl_(far_cl), zone_cls_(zone_cls), zone_radius_(zone_radius),
 			centre_radius_(centre_radius),
                         centre_(centre), needle_tree_(needle_tree), zone_trees_(zone_trees), granularity_(granularity),
-                        bbox_(bbox), checks_(0), total_checks_(0), values_size_(0), zone_pips_(zone_pips)
+                        bbox_(bbox), checks_(0), total_checks_(0), values_size_(0), zone_pips_(zone_pips), min_(CGAL::Min<FT>())
     {
         max_dist[0] = 0.; max_dist[1] = 0.; max_dist[2] = 0.;
 
@@ -308,7 +295,7 @@ public:
       int x = (int)(p.x()/granularity_);
       int y = (int)(p.y()/granularity_);
       int z = (int)(p.z()/granularity_);
-      int ix = nx*(ny*(z - minz) + y - miny) + x - minx;
+      int ix = nx*(ny*(min_(z - minz, 0)) + min_(y - miny, 0)) + min_(x - minx, 0);
 
       FT cl = values_[ix];
 
@@ -536,28 +523,68 @@ public:
     typedef int                    return_type;
     typedef typename K::Point_3    Point_3;
     typedef typename K::FT         FT;
+    typedef typename std::vector< std::pair<int, Point_inside_polyhedron*> > pip_vector;
   
-    Implicit_zone_function(zone_pip_map& zone_pips, eval_domain_function_type df, std::string& filename, int default_zone=1) : zone_pips_(zone_pips), df_(df), default_zone_(default_zone), filename_(filename)
+    Implicit_zone_function(
+            region_ip_map& region_ips,
+            const Point_3* centre,
+            float radius,
+            int* organ_id,
+            std::vector<int>& vessels,
+            std::vector<int>& needles,
+            zone_pip_map& zone_pips,
+            int default_zone=1
+    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id)
     {
-      //unstructuredGrid =
-      //  vtkSmartPointer<vtkUnstructuredGrid>::New();
-      //points =
-      //  vtkSmartPointer<vtkPoints>::New();
-      //intArray =
-      //  vtkSmartPointer<vtkIntArray>::New();
-      //intArray->SetNumberOfComponents(1);
-      //intArray->SetName("Implicit zone function");
+      Polyhedron* organ = NULL;
+      organ_pip_ = NULL;
+      radius_ = radius;
+      centre_ = centre;
+
+      extent_tree_ = new Tree();
+
+      if (organ_id != NULL) {
+        organ = new Polyhedron(*region_ips[*organ_id]);
+        extent_tree_->insert(organ->facets_begin(), organ->facets_end());
+        organ_pip_= new Point_inside_polyhedron(*organ);
+      }
+
+      extent_tree_->accelerate_distance_queries();
+
+      BOOST_FOREACH(std::vector<int>::value_type& id, vessels) {
+          Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end());
+          tree->accelerate_distance_queries();
+          trees_.push_back(tree);
+          vessels_pip_.push_back(std::pair<int, Point_inside_polyhedron*>(id, new Point_inside_polyhedron(*region_ips[id])));
+      }
+
+      BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
+          Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end());
+          tree->accelerate_distance_queries();
+          trees_.push_back(tree);
+          needles_pip_.push_back(std::pair<int, Point_inside_polyhedron*>(id, new Point_inside_polyhedron(*region_ips[id])));
+      }
     }
 
     ~Implicit_zone_function()
     {
-        save(filename_);
     }
 
     return_type operator()(const Point_3& p, const bool = true) const
     {
-        if (df_(p) > 0) {
+        if (CGAL::squared_distance(*centre_, p) > radius_ * radius_)
             return 0;
+
+        if (organ_pip_ != NULL && !(*organ_pip_)(p))
+            return *organ_id_ == 0 ? -1000 : -*organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
+
+        BOOST_FOREACH(const pip_vector::value_type& pip, vessels_pip_) {
+            if ((*pip.second)(p))
+                return -pip.first;
+        }
+        BOOST_FOREACH(const pip_vector::value_type& pip, needles_pip_) {
+            if ((*pip.second)(p))
+                return -pip.first;
         }
 
         int zone = default_zone_;
@@ -570,38 +597,23 @@ public:
         if (default_zone_ == 0)
             zone += 1;
 
-//        points->InsertNextPoint(p.x(), p.y(), p.z());
-        //intArray->InsertNextValue(zone);
         return zone;
     }
 
-    int save(std::string& filename) {
-//        unstructuredGrid->SetPoints(points);
-//        unstructuredGrid->GetPointData()->AddArray(intArray);
-//        vtkSmartPointer<vtkXMLUnstructuredGridWriter> writer =
-//          vtkSmartPointer<vtkXMLUnstructuredGridWriter>::New();
-//        writer->SetFileName(filename.c_str());
-//#if VTK_MAJOR_VERSION >= 6
-//		writer->SetInputData(unstructuredGrid);
-//#else
-//		writer->SetInput(unstructuredGrid);
-//#endif
-//        writer->Write();
-		return 0;
-	}
-
 protected:
     zone_pip_map& zone_pips_;
-    eval_domain_function_type df_;
-    int default_zone_;
-    std::string& filename_;
-    //vtkSmartPointer<vtkUnstructuredGrid> unstructuredGrid;
-    //vtkSmartPointer<vtkPoints> points;
-    //vtkSmartPointer<vtkIntArray> intArray;
+    int default_zone_, *organ_id_;
+
+    const Point_3* centre_;
+    float radius_;
+    Tree *extent_tree_;
+    std::vector<Tree*> trees_;
+    Point_inside_polyhedron *extent_pip_, *organ_pip_;
+    pip_vector vessels_pip_, needles_pip_;
 };
 
 
-typedef CGAL::Mesh_3::Labeled_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_implicit;
+typedef CGAL::Signed_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_implicit;
 typedef CGAL::Mesh_triangulation_3<Mesh_domain_implicit>::type Exact_Tr;
 typedef CGAL::Mesh_complex_3_in_triangulation_3<Exact_Tr> Exact_C3t3;
 
@@ -868,10 +880,7 @@ int mesherCGAL::run(CGALSettings& settings) {
       }
   }
 
-  Implicit_domain_function<K> idf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), vessels, needles);
-  domain_function = &idf;
-  std::string zone_file("zone.vtu");
-  Implicit_zone_function<K> izf(zone_pips, eval_domain_function, zone_file, default_zone_id);
+  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), vessels, needles, zone_pips, default_zone_id);
 
   FT bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
   if (bbox_radius < 1e-12) {
@@ -915,8 +924,6 @@ int mesherCGAL::run(CGALSettings& settings) {
 
   std::cout << "Tetrahedralizing..." << std::endl;
   C3t3 c3t3 = CGAL::make_mesh_3<C3t3>(domain, new_criteria, features(domain), no_lloyd(), no_odt(), perturb(10000,1e-3));
-  std::string idf_filename("idf.vtu");
-  idf.save(idf_filename);
 
   std::cout << " Done" << std::endl;
 
@@ -931,11 +938,11 @@ int mesherCGAL::run(CGALSettings& settings) {
   fit = c3t3.facets_in_complex_begin();
   end = c3t3.facets_in_complex_end();
 
+  /*
   std::cout << "Accelerating distance queries..." << std::endl;
   int k;
-  double dist, dist0, dist1, dist2;
+  //double dist, dist0, dist1, dist2;
 
-  /* START HERE */
   //if (include_needle)
   //    patches++;
   //Exact_polyhedron* patch_polyhedra[patches+1];
@@ -954,6 +961,7 @@ int mesherCGAL::run(CGALSettings& settings) {
       region_trees[id] = new Exact_Tree(region.facets_begin(), region.facets_end());
       region_trees[id]->accelerate_distance_queries();
   }
+  */
 
   //std::string visfile("vis.vts");
   //visualization_save(visfile);
@@ -965,66 +973,52 @@ int mesherCGAL::run(CGALSettings& settings) {
   int l = 0, m = 0;
   std::map<C3t3::Triangulation::Facet,int> boundary_indices;
   region_boundary_count_map region_boundary_count;
-  double length_scale = (bounding_radius < bbox_radius) ? bounding_radius : bbox_radius;
+  //double length_scale = (bounding_radius < bbox_radius) ? bounding_radius : bbox_radius;
   //std::cout << length_scale << std::endl;
-  for( ; fit != end ; ++fit) 
+  for( ; fit != end ; ++fit)
   {
       l++;
       if (l%1000 == 0) std::cout << " " << l << "/" << c3t3.number_of_facets_in_complex() << std::endl;
-      int n = 0;
-      for ( k = 0 ; k < 4 ; k++ )
+
+      C3t3::Surface_patch_index spi = c3t3.surface_patch_index(*fit);
+
+      int id = -1;
+
+      /* This facet is an extra-domain boundary!? */
+      if (spi.first <= 0 && spi.second <= 0)
+          continue;
+      /* This facet is on the domain boundary */
+      else if (spi.first <= 0)
+          id = -spi.first;
+      else if (spi.second <= 0)
+          id = -spi.second;
+      /* This facet is an internal boundary */
+      else
       {
-          if ((*fit).second == k) continue;
-          vi[n] = (*fit).first->vertex(k)->point();
-          v[n] = conv(vi[n]);
-          n++;
-      }
-
-      /* Generous on the first patch to ensure everything ends up somewhere if possible.
-       * Later patches will grab this back if it is theirs */
-      dist0 = fabs(CGAL::to_double(CGAL::squared_distance(*centre, vi[0]) - bounding_radius * bounding_radius));
-      dist1 = fabs(CGAL::to_double(CGAL::squared_distance(*centre, vi[1]) - bounding_radius * bounding_radius));
-      dist2 = fabs(CGAL::to_double(CGAL::squared_distance(*centre, vi[2]) - bounding_radius * bounding_radius));
-      dist = CGAL::min(dist0, CGAL::min(dist1, dist2));
-
-      if ( dist < EPS * length_scale * length_scale )
-      {
-          boundary_indices[(*fit)] = extent;
-          m++;
-      } else {
-          BOOST_FOREACH(region_tree_map::value_type& region_pair, region_trees) {
-              int id = region_pair.first;
-              Exact_Tree& tree = *(region_pair.second);
-
-              if ( tree.size() == 0 )
-                  continue;
-
-              dist0 = CGAL::to_double(tree.squared_distance(v[0]));
-              dist1 = CGAL::to_double(tree.squared_distance(v[1]));
-              dist2 = CGAL::to_double(tree.squared_distance(v[2]));
-
-              dist = CGAL::max(dist0, CGAL::max(dist1, dist2));
-              //std::cout << dist << " " << v[0] << " " << tree.closest_point(v[0]) << std::endl;
-
-              if ( dist < EPS * length_scale * length_scale )
+          /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
+          BOOST_FOREACH(zone_pip_map::value_type& zone_pair, zone_pips) {
+              int zone_id = zone_pair.first;
+              if ((region_eps.find(zone_id) != region_eps.end()) && (spi.first == zone_id || spi.second == zone_id))
               {
-                  //(*fit).boundary_index = k;
-                  //c3t3.set_subdomain_index((*fit).first, k+2);
-                  //std::cout << k << " " << dist << std::endl;
-                  boundary_indices[(*fit)] = id;
-                  //std::cout << id << dist0 << " " << dist1 << " " << dist2 << std::endl;
-
-                  if (!region_boundary_count.count(id))
-                      region_boundary_count[id] = 0;
-                  region_boundary_count[id]++;
-                  m++;
+                  id = zone_id;
                   break;
-              }
-              else {
-                  boundary_indices[(*fit)] = 0;
               }
           }
       }
+
+      if (id < 0)
+      {
+          boundary_indices[(*fit)] = 0;
+          continue;
+      }
+
+      m++;
+
+      boundary_indices[(*fit)] = id;
+
+      if (!region_boundary_count.count(id))
+          region_boundary_count[id] = 0;
+      region_boundary_count[id]++;
   }
   std::cout << m << " / " << l << " surface facets tagged" << std::endl;
   BOOST_FOREACH(region_boundary_count_map::value_type& region_pair, region_boundary_count) {
