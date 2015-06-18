@@ -61,8 +61,8 @@ int main(int argc, char* argv[])
   float centre_radius;
   float zone_radius;
   float bounding_radius;
-  int tissue_id;
-  bool dump_settings;
+  int tissue_id, extent_index = -1;
+  bool dump_settings = false;
   std::string settings_binary_file;
 
   cliopt::options_description options_description("Allowed options");
@@ -75,6 +75,7 @@ int main(int argc, char* argv[])
     ("centre_radius,r", cliopt::value<float>(&centre_radius)->default_value(1.), "set inner radius around centre for high density cells")
     ("zone_radius", cliopt::value<float>(&zone_radius)->default_value(0.), "set radius around zone for high density cells")
     ("tissueid,t", cliopt::value<int>(&tissue_id)->default_value(1), "default ID of volume elements not otherwise in a zone")
+    ("extent_index,i", cliopt::value<int>(&extent_index)->default_value(-1), "ID of bounding surface elements (overridden by extent parameter)")
     ("bounding_radius,R", cliopt::value<float>(&bounding_radius)->default_value(50.), "set radius around extent (NB: overridden if extent dimensions exceed this)")
     ("tetrahedralize-only,t", "do not combine surfaces but use previously produced combined surfaces for tetrahedralization")
     ("suppress-nef-loading,s", cliopt::value(&suppress_nef_loading)->zero_tokens(), "suppress loading of cached NEF polyhedra if newer than input")
@@ -132,6 +133,7 @@ int main(int argc, char* argv[])
   settings.set_mark_zone_boundaries(!vm["mark_zone_boundaries"].empty());
   settings.set_solid_zone(!vm["solid_zone"].empty());
   settings.set_dump_settings(dump_settings);
+  std::cout << dump_settings << "<--" << std::endl;
 
   if (!vm["nearfield"].empty())
       settings.set_near_field(vm["nearfield"].as<float>());
@@ -184,6 +186,9 @@ int main(int argc, char* argv[])
       split_region(extent_file, file_string, index, characteristic_length, priority);
       settings.set_extent_file(file_string);
       settings.set_extent_index(index);
+  }
+  else if (extent_index > 0) {
+      settings.set_extent_index(extent_index);
   }
 
   if (vm.count("needles")) {

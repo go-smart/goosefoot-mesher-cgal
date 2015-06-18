@@ -147,97 +147,6 @@ class ZonePrioritySorting
 
 typedef std::map< int, Point_inside_polyhedron*, ZonePrioritySorting > zone_pip_map;
 
-template <typename K >
-class Implicit_domain_function
-{
-public:
-    typedef typename K::Point_3    P3;
-    typedef typename K::FT         FT;
-  
-public:
-    Implicit_domain_function(region_ip_map& region_ips, const P3* centre, float radius, int* organ_id, std::vector<int>& vessels, std::vector<int>& needles)
-    {
-      Polyhedron* organ = NULL;
-      organ_pip_ = NULL;
-      radius_ = radius;
-      centre_ = centre;
-
-      extent_tree_ = new Tree();
-
-      if (organ_id != NULL) {
-        organ = new Polyhedron(*region_ips[*organ_id]);
-        extent_tree_->insert(organ->facets_begin(), organ->facets_end());
-        organ_pip_= new Point_inside_polyhedron(*organ);
-      }
-
-      extent_tree_->accelerate_distance_queries();
-
-      BOOST_FOREACH(std::vector<int>::value_type& id, vessels) {
-          Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end());
-          tree->accelerate_distance_queries();
-          trees_.push_back(tree);
-          vessels_pip_.push_back(new Point_inside_polyhedron(*region_ips[id]));
-      }
-
-      BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
-          Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end());
-          tree->accelerate_distance_queries();
-          trees_.push_back(tree);
-          needles_pip_.push_back(new Point_inside_polyhedron(*region_ips[id]));
-      }
-
-      //unstructuredGrid =
-      //  vtkSmartPointer<vtkUnstructuredGrid>::New();
-      //points =
-      //  vtkSmartPointer<vtkPoints>::New();
-      //floatArray =
-      //  vtkSmartPointer<vtkFloatArray>::New();
-      //floatArray->SetNumberOfComponents(1);
-      //floatArray->SetName("Implicit domain function");
-    }
-
-    FT distance_function(const P3& p)
-    {
-        bool sign = (CGAL::squared_distance(*centre_, p) <= radius_ * radius_);
-        if (organ_pip_ != NULL) sign = sign && (*organ_pip_)(p);
-		//points->InsertNextPoint(p.x(), p.y(), p.z());
-        if (sign) {
-          BOOST_FOREACH(std::vector<Point_inside_polyhedron*>::value_type& pip, vessels_pip_) {
-              if ((*pip)(p)) {
-                  sign = false;
-                  break;
-              }
-          }
-          BOOST_FOREACH(std::vector<Point_inside_polyhedron*>::value_type& pip, needles_pip_) {
-              if ((*pip)(p)) {
-                  sign = false;
-                  break;
-              }
-          }
-        }
-        //double squared_distance = extent_tree_->squared_distance(p);
-        //BOOST_FOREACH(std::vector<Tree*>::value_type& tree, trees_) {
-        //    squared_distance = CGAL::min(tree->squared_distance(p), squared_distance);
-        //}
-        //double retval = (sign ? -1 : 1) * squared_distance;//returns -1 or 1 times squared_distance
-        double retval = (sign ? -1 : 1);
-
-        //floatArray->InsertNextValue((float)retval);
-        return retval;
-    }
-
-private:
-    const P3* centre_;
-    float radius_;
-    Tree *extent_tree_;
-    std::vector<Tree*> trees_;
-    Point_inside_polyhedron *extent_pip_, *organ_pip_;
-    std::vector<Point_inside_polyhedron*> vessels_pip_, needles_pip_;
-    //vtkSmartPointer<vtkUnstructuredGrid> unstructuredGrid;
-    //vtkSmartPointer<vtkPoints> points;
-    //vtkSmartPointer<vtkFloatArray> floatArray;
-};
-
 template <typename Gt, typename Index_>
 class Proximity_domain_field_3
 {
@@ -250,6 +159,7 @@ private:
   // Map to store field values
   int minx, miny, minz, nx, ny, nz;
   FT length_scale;
+  CGAL::Max<FT> max_;
   CGAL::Min<FT> min_;
   
 public:
@@ -260,7 +170,8 @@ public:
                         tree_(tree), near_cl_(near_cl), far_cl_(far_cl), zone_cls_(zone_cls), zone_radius_(zone_radius),
 			centre_radius_(centre_radius),
                         centre_(centre), needle_tree_(needle_tree), zone_trees_(zone_trees), granularity_(granularity),
-                        bbox_(bbox), checks_(0), total_checks_(0), values_size_(0), zone_pips_(zone_pips), min_(CGAL::Min<FT>())
+                        bbox_(bbox), checks_(0), total_checks_(0), values_size_(0), zone_pips_(zone_pips),
+                        max_(CGAL::Max<FT>()), min_(CGAL::Min<FT>())
     {
         max_dist[0] = 0.; max_dist[1] = 0.; max_dist[2] = 0.;
 
@@ -295,7 +206,7 @@ public:
       int x = (int)(p.x()/granularity_);
       int y = (int)(p.y()/granularity_);
       int z = (int)(p.z()/granularity_);
-      int ix = nx*(ny*(min_(z - minz, 0)) + min_(y - miny, 0)) + min_(x - minx, 0);
+      int ix = nx*(ny*(min_(max_(z - minz, 0), nz)) + min_(max_(y - miny, 0), ny)) + min_(max_(x - minx, 0), nx);
 
       FT cl = values_[ix];
 
@@ -509,13 +420,6 @@ int parse_region(region_string_map& region_files, const std::string& input_strin
   return id;
 }
 
-static Implicit_domain_function<K> *domain_function;
-K::FT eval_domain_function(const Point& p) {
-    return domain_function->distance_function(p);
-}
-
-typedef K::FT (*eval_domain_function_type)(const Point& p);
-
 template<typename K >
 class Implicit_zone_function
 {
@@ -530,11 +434,12 @@ public:
             const Point_3* centre,
             float radius,
             int* organ_id,
+            int* extent_id,
             std::vector<int>& vessels,
             std::vector<int>& needles,
             zone_pip_map& zone_pips,
             int default_zone=1
-    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id)
+    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id), extent_id_(extent_id)
     {
       Polyhedron* organ = NULL;
       organ_pip_ = NULL;
@@ -573,7 +478,7 @@ public:
     return_type operator()(const Point_3& p, const bool = true) const
     {
         if (CGAL::squared_distance(*centre_, p) > radius_ * radius_)
-            return 0;
+            return *extent_id_ == 0 ? 0 : -*extent_id_;
 
         if (organ_pip_ != NULL && !(*organ_pip_)(p))
             return *organ_id_ == 0 ? -1000 : -*organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
@@ -602,7 +507,7 @@ public:
 
 protected:
     zone_pip_map& zone_pips_;
-    int default_zone_, *organ_id_;
+    int default_zone_, *organ_id_, *extent_id_;
 
     const Point_3* centre_;
     float radius_;
@@ -714,7 +619,7 @@ int mesherCGAL::run(CGALSettings& settings) {
 
   extent = settings.extent_index();
   //region_files[extent] = settings.extent_file();
-  //std::cout << " - Extent : " << extent << std::endl;
+  std::cout << " - Extent : " << extent << std::endl;
 
   include_needle = settings.needles_size() > 0;
   if (include_needle) {
@@ -880,7 +785,7 @@ int mesherCGAL::run(CGALSettings& settings) {
       }
   }
 
-  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), vessels, needles, zone_pips, default_zone_id);
+  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), &extent, vessels, needles, zone_pips, default_zone_id);
 
   FT bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
   if (bbox_radius < 1e-12) {

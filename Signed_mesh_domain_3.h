@@ -74,7 +74,7 @@ public:
   Signed_mesh_domain_3(const Function& f,
                          const Sphere_3& bounding_sphere,
                          const FT& error_bound = FT(1e-3))
-    : Base(f, bounding_sphere, error_bound)  {}
+    : Base(f, bounding_sphere, error_bound), signed_function_(f)  {}
 
   /// Destructor
   virtual ~Signed_mesh_domain_3() {}
@@ -85,8 +85,8 @@ public:
 
     Subdomain operator()(const Point_3& p) const
     {
-      // f(p)==0 means p is outside the domain
-      Subdomain_index index = (r_domain_.function_)(p);
+      // f(p)<=0 means p is outside the domain
+      Subdomain_index index = (r_domain_.signed_function_)(p);
       if ( Subdomain_index() >= index )
         return Subdomain();
       else
@@ -96,7 +96,13 @@ public:
     const Signed_mesh_domain_3& r_domain_;
   };
 
+  Is_in_domain is_in_domain_object() const { return Is_in_domain(*this); }
+
   //TODO: Does the interval bisection get affected by artificial subdomains outside the domain?
+
+protected:
+  /// The function which answers subdomain queries (this would not be required if Lmd3._function were protected not private)
+  const Function signed_function_;
 
 private:
   // Disabled copy constructor & assignment operator
