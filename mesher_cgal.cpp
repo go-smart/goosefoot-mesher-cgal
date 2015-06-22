@@ -117,6 +117,13 @@ typedef CGAL::Mesh_criteria_3<Tr> Mesh_criteria;
 // To avoid verbose function and named parameters call
 using namespace CGAL::parameters;
 
+struct activity_sphere {
+    K::Point_3* centre;
+    float r;
+    int i;
+};
+
+typedef std::map< int, struct activity_sphere* > zone_activity_sphere_map;
 typedef std::map< int, int > region_boundary_count_map;
 typedef std::map< int, std::string > region_string_map;
 typedef std::map< int, Exact_polyhedron* > region_ep_map;
@@ -438,8 +445,10 @@ public:
             std::vector<int>& vessels,
             std::vector<int>& needles,
             zone_pip_map& zone_pips,
+            zone_activity_sphere_map& zone_activity_spheres,
             int default_zone=1
-    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id), extent_id_(extent_id)
+    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id), extent_id_(extent_id),
+        zone_activity_spheres_(zone_activity_spheres)
     {
       Polyhedron* organ = NULL;
       organ_pip_ = NULL;
@@ -477,11 +486,17 @@ public:
 
     return_type operator()(const Point_3& p, const bool = true) const
     {
+        int zone = default_zone_;
+
         if (CGAL::squared_distance(*centre_, p) > radius_ * radius_)
             return *extent_id_ == 0 ? 0 : -*extent_id_;
 
-        if (organ_pip_ != NULL && !(*organ_pip_)(p))
-            return *organ_id_ == 0 ? -1000 : -*organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
+        if (organ_pip_ != NULL) {
+            if (!(*organ_pip_)(p))
+                return *organ_id_ == 0 ? -1000 : -*organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
+            else
+                zone = *organ_id_;
+        }
 
         BOOST_FOREACH(const pip_vector::value_type& pip, vessels_pip_) {
             if ((*pip.second)(p))
@@ -492,10 +507,19 @@ public:
                 return -pip.first;
         }
 
-        int zone = default_zone_;
         BOOST_FOREACH(const zone_pip_map::value_type& zone_pair, zone_pips_) {
             if ((*zone_pair.second)(p)) {
                 zone = zone_pair.first;
+                zone_activity_sphere_map::iterator activity_sphere = zone_activity_spheres_.find(zone_pair.first);
+                if (activity_sphere != zone_activity_spheres_.end())
+                {
+                    Point_3* centre = activity_sphere->second->centre;
+                    float radius = activity_sphere->second->r;
+                    if (CGAL::squared_distance(*centre, p) > radius * radius)
+                    {
+                        return -activity_sphere->second->i;
+                    }
+                }
                 break;
             }
         }
@@ -515,6 +539,7 @@ protected:
     std::vector<Tree*> trees_;
     Point_inside_polyhedron *extent_pip_, *organ_pip_;
     pip_vector vessels_pip_, needles_pip_;
+    zone_activity_sphere_map& zone_activity_spheres_;
 };
 
 
@@ -541,9 +566,10 @@ int mesherCGAL::run(CGALSettings& settings) {
   zone_ep_map zone_eps;
   zone_cls_map zone_cls;
   zone_cls_map zone_priorities;
+  zone_activity_sphere_map zone_activity_spheres;
   std::vector< int > vessels;
   std::vector< int > needles;
-  std::vector< int > zones;
+  std::vector< int > zones, polyhedral_zones;
   int organ, extent;
   int default_zone_id;
 
@@ -650,6 +676,7 @@ int mesherCGAL::run(CGALSettings& settings) {
           int id = settings.zones_index(i);
           zone_files[id] = settings.zones(i);
           zones.push_back(id);
+          polyhedral_zones.push_back(id);
           zone_cls[id] = zonefield;
           zone_priorities[id] = 0.0;
           std::cout << id << " ";
@@ -658,6 +685,7 @@ int mesherCGAL::run(CGALSettings& settings) {
           int id = settings.zone(i).index();
           zone_files[id] = settings.zone(i).file();
           zones.push_back(id);
+          polyhedral_zones.push_back(id);
           std::cout << id;
 
           if (settings.zone(i).has_characteristic_length()) {
@@ -675,6 +703,25 @@ int mesherCGAL::run(CGALSettings& settings) {
           }
           else {
               zone_priorities[id] = 0.0;
+          }
+
+          if (settings.zone(i).has_activity() && settings.zone(i).has_inactivity_index()) {
+              zone_activity_spheres[id] = new struct activity_sphere;
+              double
+                  x = settings.zone(i).activity().x(),
+                  y = settings.zone(i).activity().y(),
+                  z = settings.zone(i).activity().z();
+              if (centre != NULL)
+              {
+                  x += centre->x();
+                  y += centre->y();
+                  z += centre->z();
+              }
+              zone_activity_spheres[id]->centre = new Point(x, y, z);
+              zone_activity_spheres[id]->r = settings.zone(i).activity().r();
+              zone_activity_spheres[id]->i = settings.zone(i).inactivity_index();
+              zones.push_back(zone_activity_spheres[id]->i);
+              std::cout << "[" << zone_activity_spheres[id]->i << ":" << zone_activity_spheres[id]->r << "]";
           }
           std::cout << " ";
       }
@@ -759,12 +806,12 @@ int mesherCGAL::run(CGALSettings& settings) {
       poly_copy<Polyhedron,Exact_polyhedron>(*region_ips[id], *region_eps[id]);
   }
 
-  BOOST_FOREACH(std::vector<int>::value_type& id, zones) {
+  BOOST_FOREACH(const zone_ep_map::value_type& zone_pair, zone_eps) {
+      int id = zone_pair.first;
       Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
       zone_ips[id] = inexact_boundary_polyhedron;
       poly_copy<Polyhedron,Exact_polyhedron>(*zone_ips[id], *zone_eps[id]);
       zone_pips[id] = new Point_inside_polyhedron(*zone_ips[id]);
-      std::cout << "ID" << id << "(" << zone_pips.size() << ")" << std::endl;
   }
 
   if (zone_pips.size())
@@ -785,7 +832,8 @@ int mesherCGAL::run(CGALSettings& settings) {
       }
   }
 
-  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), &extent, vessels, needles, zone_pips, default_zone_id);
+  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), &extent, vessels, needles, zone_pips,
+          zone_activity_spheres, default_zone_id);
 
   FT bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
   if (bbox_radius < 1e-12) {
@@ -811,8 +859,9 @@ int mesherCGAL::run(CGALSettings& settings) {
       }
   }
   zone_tree_map zone_trees;
-  if (!zones.empty() && !omit_zone_tree) {
-      BOOST_FOREACH(std::vector<int>::value_type& id, zones) {
+  if (!zone_ips.empty() && !omit_zone_tree) {
+      BOOST_FOREACH(const zone_ip_map::value_type& zone_pair, zone_ips) {
+          int id = zone_pair.first;
           zone_trees[id] = new Tree();
           //Polyhedron* inexact_zone_polyhedron = new Polyhedron();
           //region_ips[id] = inexact_zone_polyhedron;
@@ -898,12 +947,11 @@ int mesherCGAL::run(CGALSettings& settings) {
       else if (spi.second <= 0)
           id = -spi.second;
       /* This facet is an internal boundary */
-      else
+      else if (mark_zone_boundaries)
       {
           /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
-          BOOST_FOREACH(zone_pip_map::value_type& zone_pair, zone_pips) {
-              int zone_id = zone_pair.first;
-              if ((region_eps.find(zone_id) != region_eps.end()) && (spi.first == zone_id || spi.second == zone_id))
+          BOOST_FOREACH(std::vector<int>::value_type& zone_id, zones) {
+              if (spi.first == zone_id || spi.second == zone_id)
               {
                   id = zone_id;
                   break;

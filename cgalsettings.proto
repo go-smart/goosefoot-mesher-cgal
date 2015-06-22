@@ -20,12 +20,21 @@
 package mesherCGAL;
 
 message CGALSettings {
+    message Sphere {
+        required float x = 1;
+        required float y = 2;
+        required float z = 3;
+        required float r = 4;
+    };
+
     message Zone {
         optional string file = 1;
         optional string name = 2;
         optional int32 index = 3;
         optional float characteristic_length = 4;
         optional float priority = 5;
+        optional Sphere activity = 6;
+        optional int32 inactivity_index = 7;
     };
 
     repeated float centre = 1;

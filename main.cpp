@@ -28,7 +28,12 @@ namespace cliopt = boost::program_options;
 
 using namespace mesherCGAL;
 
-void split_region(const std::string& input_string, std::string& file_string, int& index, float& characteristic_length, float& priority) {
+struct activity_sphere {
+    float x, y, z, r;
+    int i;
+};
+
+void split_region(const std::string& input_string, std::string& file_string, int& index, float& characteristic_length, float& priority, struct activity_sphere& activity_sphere) {
   std::vector<std::string> pair;
   boost::split(pair, input_string, boost::is_any_of(":"));
 
@@ -41,6 +46,20 @@ void split_region(const std::string& input_string, std::string& file_string, int
       priority = boost::lexical_cast<float>(pair[3]);
   else
       priority = 0;
+
+  if (pair.size() > 4)
+  {
+      std::vector<std::string> sphere;
+      boost::split(sphere, pair[4], boost::is_any_of("_"));
+      activity_sphere.x = boost::lexical_cast<float>(sphere[0]);
+      activity_sphere.y = boost::lexical_cast<float>(sphere[1]);
+      activity_sphere.z = boost::lexical_cast<float>(sphere[2]);
+      activity_sphere.r = boost::lexical_cast<float>(sphere[3]);
+      activity_sphere.i = boost::lexical_cast<int>(sphere[4]);
+  }
+  else
+      activity_sphere.i = -1;
+
 }
 
 int main(int argc, char* argv[])
@@ -133,7 +152,6 @@ int main(int argc, char* argv[])
   settings.set_mark_zone_boundaries(!vm["mark_zone_boundaries"].empty());
   settings.set_solid_zone(!vm["solid_zone"].empty());
   settings.set_dump_settings(dump_settings);
-  std::cout << dump_settings << "<--" << std::endl;
 
   if (!vm["nearfield"].empty())
       settings.set_near_field(vm["nearfield"].as<float>());
@@ -172,18 +190,19 @@ int main(int argc, char* argv[])
 
   std::string file_string;
   int index;
+  struct activity_sphere activity_sphere;
   float characteristic_length, priority;
 
   bool include_organ = (!vm["organ"].empty());
 
   if (include_organ) {
-       split_region(organ_file, file_string, index, characteristic_length, priority);
+       split_region(organ_file, file_string, index, characteristic_length, priority, activity_sphere);
        settings.set_organ_file(file_string);
        settings.set_organ_index(index);
   }
 
   if (!vm["extent"].empty()) {
-      split_region(extent_file, file_string, index, characteristic_length, priority);
+      split_region(extent_file, file_string, index, characteristic_length, priority, activity_sphere);
       settings.set_extent_file(file_string);
       settings.set_extent_index(index);
   }
@@ -193,7 +212,7 @@ int main(int argc, char* argv[])
 
   if (vm.count("needles")) {
       BOOST_FOREACH(const std::string& needle_string, vm["needles"].as< std::vector< std::string > >()) {
-          split_region(needle_string, file_string, index, characteristic_length, priority);
+          split_region(needle_string, file_string, index, characteristic_length, priority, activity_sphere);
           settings.add_needles(file_string);
           settings.add_needles_index(index);
       }
@@ -201,7 +220,7 @@ int main(int argc, char* argv[])
 
   if (vm.count("vessels")) {
       BOOST_FOREACH(const std::string& vessel_string, vm["vessels"].as< std::vector< std::string > >()) {
-          split_region(vessel_string, file_string, index, characteristic_length, priority);
+          split_region(vessel_string, file_string, index, characteristic_length, priority, activity_sphere);
           settings.add_vessels(file_string);
           settings.add_vessels_index(index);
       }
@@ -210,13 +229,22 @@ int main(int argc, char* argv[])
   if (vm.count("zones")) {
       BOOST_FOREACH(const std::string& zone_string, vm["zones"].as< std::vector< std::string > >()) {
           float characteristic_length = -1, priority = 0;
-          split_region(zone_string, file_string, index, characteristic_length, priority);
+          split_region(zone_string, file_string, index, characteristic_length, priority, activity_sphere);
           CGALSettings::Zone* zone = settings.add_zone();
           zone->set_file(file_string);
           zone->set_index(index);
           zone->set_priority(priority);
           if (characteristic_length > 0)
               zone->set_characteristic_length(characteristic_length);
+          if (activity_sphere.i >= 0)
+          {
+              CGALSettings::Sphere* sphere = zone->mutable_activity();
+              sphere->set_x(activity_sphere.x);
+              sphere->set_y(activity_sphere.y);
+              sphere->set_z(activity_sphere.z);
+              sphere->set_r(activity_sphere.r);
+              zone->set_inactivity_index(activity_sphere.i);
+          }
       }
   }
 
