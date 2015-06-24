@@ -783,7 +783,7 @@ int mesherCGAL::run(CGALSettings& settings) {
       Point_inside_polyhedron organ_pip(*region_ips[organ]);
       if (!organ_pip(*centre))
       {
-          std::cerr << "No centre defined and no organ to guess from" << std::endl;
+          std::cerr << "Centre lies outside organ" << std::endl;
           exit(3);
       }
   } else if (centre != NULL) {
