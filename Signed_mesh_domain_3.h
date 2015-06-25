@@ -75,19 +75,29 @@ public:
   typedef typename Base::FT FT;
 
   /**
-   * Constructor
-   * @param f the function which negative values defines the domain
-   * @param bounding_sphere a bounding sphere of the domain
-   * @param error_bound the error bound relative to the sphere radius
+   * @brief Constructor
    */
   Signed_mesh_domain_3(const Function& f,
                          const Sphere_3& bounding_sphere,
-                         const FT& error_bound = FT(1e-3))
-    : Base(f, bounding_sphere, error_bound), signed_function_(f),
-        squared_error_bound_(squared_error_bound(bounding_sphere,error_bound)) {}
+                         const FT& error_bound = FT(1e-3),
+                         CGAL::Random* p_rng = NULL);
+
+  Signed_mesh_domain_3(const Function& f,
+                         const Bbox_3& bbox,
+                         const FT& error_bound = FT(1e-3),
+                         CGAL::Random* p_rng = NULL);
+
+  Signed_mesh_domain_3(const Function& f,
+                         const Iso_cuboid_3& bbox,
+                         const FT& error_bound = FT(1e-3),
+                         CGAL::Random* p_rng = NULL);
 
   /// Destructor
-  virtual ~Signed_mesh_domain_3() {}
+  virtual ~Signed_mesh_domain_3()
+  {
+    if(delete_rng_)
+      delete p_rng_;
+  }
 
   /**
    * Constructs  a set of \ccc{n} points on the surface, and output them to
@@ -356,6 +366,7 @@ protected:
   FT squared_error_bound_;
 
 private:
+  bool delete_rng_;
   CGAL::Random* p_rng_;
 
 private:
@@ -383,6 +394,69 @@ private:
 
 };  // end class Signed_mesh_domain_3
 
+
+//-------------------------------------------------------
+// Method implementation
+//-------------------------------------------------------
+template<class F, class BGT>
+Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
+                       const F& f,
+                       const Sphere_3& bounding_sphere,
+                       const FT& error_bound,
+                       CGAL::Random* p_rng)
+: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound, p_rng)
+, signed_function_(f)
+, p_rng_(p_rng)
+, delete_rng_(false)
+, squared_error_bound_(squared_error_bound(bounding_sphere,error_bound))
+{
+  // TODO : CGAL_ASSERT(0 < f(bounding_sphere.get_center()) ) ?
+  if(!p_rng_)
+  {
+    p_rng_ = new CGAL::Random(0);
+    delete_rng_ = true;
+  }
+}
+
+template<class F, class BGT>
+Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
+                       const F& f,
+                       const Bbox_3& bbox,
+                       const FT& error_bound,
+                       CGAL::Random* p_rng)
+: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
+, signed_function_(f)
+, p_rng_(p_rng)
+, delete_rng_(false)
+, squared_error_bound_(squared_error_bound(CGAL::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
+{
+  // TODO : CGAL_ASSERT(0 < f(bounding_sphere.get_center()) ) ?
+  if(!p_rng_)
+  {
+    p_rng_ = new CGAL::Random(0);
+    delete_rng_ = true;
+  }
+}
+
+template<class F, class BGT>
+Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
+                       const F& f,
+                       const Iso_cuboid_3& bbox,
+                       const FT& error_bound,
+                       CGAL::Random* p_rng)
+: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
+, signed_function_(f)
+, p_rng_(p_rng)
+, delete_rng_(false)
+, squared_error_bound_(squared_error_bound(CGAL::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
+{
+  // TODO : CGAL_ASSERT(0 < f( bbox.get_center()) ) ?
+  if(!p_rng_)
+  {
+    p_rng_ = new CGAL::Random(0);
+    delete_rng_ = true;
+  }
+}
 
 template<class F, class BGT>
 template<class OutputIterator>
