@@ -207,13 +207,19 @@ public:
   }
 
   /// Returns size
-  FT operator()(const Point_3& p, const int dim, const Index& index) const
+  FT operator()(const Point_3& q, const int dim, const Index& index) const
   {
+      Point_3 p(
+              min_(max_(q.x(), bbox_.xmin()), bbox_.xmax()),
+              min_(max_(q.y(), bbox_.ymin()), bbox_.ymax()),
+              min_(max_(q.z(), bbox_.zmin()), bbox_.zmax())
+      );
       std::vector<int> *tup = new std::vector<int>;
       int x = (int)(p.x()/granularity_);
       int y = (int)(p.y()/granularity_);
       int z = (int)(p.z()/granularity_);
-      int ix = nx*(ny*(min_(max_(z - minz, 0), nz)) + min_(max_(y - miny, 0), ny)) + min_(max_(x - minx, 0), nx);
+      //int ix = nx*(ny*(min_(max_(z - minz, 0), nz - 1)) + min_(max_(y - miny, 0), ny - 1)) + min_(max_(x - minx, 0), nx - 1);
+      int ix = nx*(ny*(z - minz) + y - miny) + x - minx;
 
       FT cl = values_[ix];
 
@@ -221,7 +227,11 @@ public:
 
       if ( checks_ % 10000 == 0 ) {
           total_checks_ += checks_;
-          std::cout << "Cached " << values_size_ << " blocks (miss rate " << values_size_*100./total_checks_ << "%) - max. cl: " << max_cl_ << " - max. distances from key points/surfaces: " << max_dist[0] << " " << max_dist[1] << " " << max_dist[2] << std::endl;
+          std::cout << "Cached " << values_size_
+              << " blocks (miss rate " << values_size_*100./total_checks_
+              << "%) - max. cl: " << max_cl_
+              << " - max. distances from key points/surfaces: " << max_dist[0]
+              << " " << max_dist[1] << " " << max_dist[2] << std::endl;
           checks_ = 0;
 
           //if (values_.size() > 0) {

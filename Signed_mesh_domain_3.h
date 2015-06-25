@@ -66,6 +66,7 @@ public:
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Segment_3  Segment_3;
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Ray_3      Ray_3;
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Line_3     Line_3;
+  typedef typename Labeled_mesh_domain_3<Function, BGT>::Vector_3     Vector_3;
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Surface_patch_index     Surface_patch_index;
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Index     Index;
   typedef typename Labeled_mesh_domain_3<Function, BGT>::Intersection     Intersection;
@@ -87,6 +88,29 @@ public:
 
   /// Destructor
   virtual ~Signed_mesh_domain_3() {}
+
+  /**
+   * Constructs  a set of \ccc{n} points on the surface, and output them to
+   *  the output iterator \ccc{pts} whose value type is required to be
+   *  \ccc{std::pair<Points_3, Index>}.
+   */
+  struct Construct_initial_points
+  {
+    Construct_initial_points(const Signed_mesh_domain_3& domain)
+      : r_domain_(domain) {}
+
+    template<class OutputIterator>
+    OutputIterator operator()(OutputIterator pts, const int n = 12) const;
+
+  private:
+    const Signed_mesh_domain_3& r_domain_;
+  };
+
+  /// Returns Construct_initial_points object
+  Construct_initial_points construct_initial_points_object() const
+  {
+    return Construct_initial_points(*this);
+  }
 
   struct Is_in_domain
   {
@@ -265,7 +289,7 @@ public:
         // If the two points are enough close, then we return midpoint
         if ( squared_distance(p1, p2) < r_domain_.squared_error_bound_ )
         {
-          CGAL_assertion(value_at_p1 != value_at_p2);
+          CGAL_assertion(value_at_p1 != value_at_p2 && (value_at_p1 > 0 || value_at_p2 > 0));
           return Intersection(mid, index, 2);
         }
 
@@ -319,10 +343,20 @@ public:
     return Construct_intersection(*this);
   }
 
+  /// Returns the bounding sphere of an Iso_cuboid_3
+  Sphere_3 bounding_sphere(const Iso_cuboid_3& bbox) const
+  {
+    typename BGT::Construct_sphere_3 sphere = BGT().construct_sphere_3_object();
+    return sphere((bbox.min)(), (bbox.max)());
+  }
+
 protected:
   /// The function which answers subdomain queries (this would not be required if Lmd3._function were protected not private)
   const Function signed_function_;
   FT squared_error_bound_;
+
+private:
+  CGAL::Random* p_rng_;
 
 private:
   // Disabled copy constructor & assignment operator
@@ -348,6 +382,87 @@ private:
   }
 
 };  // end class Signed_mesh_domain_3
+
+
+template<class F, class BGT>
+template<class OutputIterator>
+OutputIterator
+Signed_mesh_domain_3<F,BGT>::Construct_initial_points::operator()(
+                                                    OutputIterator pts,
+                                                    const int nb_points) const
+{
+  // Create point_iterator on and in bounding_sphere
+  typedef Random_points_on_sphere_3<Point_3> Random_points_on_sphere_3;
+  typedef Random_points_in_sphere_3<Point_3> Random_points_in_sphere_3;
+
+
+  const FT squared_radius = BGT().compute_squared_radius_3_object()(
+      r_domain_.bounding_sphere(r_domain_.bounding_box()));
+
+  const double radius = std::sqrt(CGAL::to_double(squared_radius));
+
+  CGAL::Random& rng = *(r_domain_.p_rng_);
+  Random_points_on_sphere_3 random_point_on_sphere(radius, rng);
+  Random_points_in_sphere_3 random_point_in_sphere(radius, rng);
+
+  // Get some functors
+  typename BGT::Construct_segment_3 segment_3 =
+                              BGT().construct_segment_3_object();
+  typename BGT::Construct_vector_3 vector_3 =
+                              BGT().construct_vector_3_object();
+  typename BGT::Construct_translated_point_3 translate =
+                              BGT().construct_translated_point_3_object();
+  typename BGT::Construct_center_3 center = BGT().construct_center_3_object();
+
+  // Get translation from origin to sphere center
+  Point_3 center_pt = center(r_domain_.bounding_sphere(r_domain_.bounding_box()));
+  const Vector_3 sphere_translation = vector_3(CGAL::ORIGIN, center_pt);
+
+  // Create nb_point points
+  int n = nb_points;
+#ifdef CGAL_MESH_3_VERBOSE
+  std::cerr << "construct initial points:\n";
+#endif
+  while ( 0 != n )
+  {
+    // Get a random segment
+    const Point_3 random_point = translate(*random_point_on_sphere,
+                                           sphere_translation);
+    const Segment_3 random_seg = segment_3(center_pt, random_point);
+
+    // Add the intersection to the output if it exists
+    Surface_patch surface = r_domain_.do_intersect_surface_object()(random_seg);
+    if ( surface )
+    {
+      const Point_3 intersect_pt = CGAL::cpp11::get<0>(
+          r_domain_.construct_intersection_object()(random_seg));
+      *pts++ = std::make_pair(intersect_pt,
+                              r_domain_.index_from_surface_patch_index(*surface));
+      --n;
+
+#ifdef CGAL_MESH_3_VERBOSE
+      std::cerr << boost::format("\r             \r"
+                                 "%1%/%2% initial point(s) found...")
+                   % (nb_points - n)
+                   % nb_points;
+#endif
+    }
+    else
+    {
+      // Get a new random point into sphere as center of object
+      // It may be necessary if the center of the domain is empty, e.g. torus
+      // In general case, it is good for input point dispersion
+      ++random_point_in_sphere;
+      center_pt = translate(*random_point_in_sphere, sphere_translation);
+    }
+    ++random_point_on_sphere;
+  }
+
+#ifdef CGAL_MESH_3_VERBOSE
+  std::cerr << "\n";
+#endif
+  return pts;
+}
 
 
 }  // end namespace CGAL
