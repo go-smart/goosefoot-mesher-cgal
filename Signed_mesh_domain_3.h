@@ -62,7 +62,6 @@ public:
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Subdomain Subdomain;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Subdomain_index Subdomain_index;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Surface_patch Surface_patch;
-  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Iso_cuboid_3  Iso_cuboid_3;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Segment_3  Segment_3;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Ray_3      Ray_3;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Line_3     Line_3;
@@ -70,6 +69,7 @@ public:
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Surface_patch_index     Surface_patch_index;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Index     Index;
   typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Intersection     Intersection;
+  typedef typename BGT::Iso_cuboid_3  Iso_cuboid_3;
   typedef typename Base::Sphere_3 Sphere_3;
   typedef typename Base::Point_3 Point_3;
   typedef typename Base::FT FT;
