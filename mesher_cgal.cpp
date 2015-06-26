@@ -601,7 +601,7 @@ int mesherCGAL::run(CGALSettings& settings) {
 
   if (settings.centre_size() > 0) {
       if (settings.centre_size() != 3) {
-          std::cerr << "Need an \"x,y,z\" argument to define centre point - need 3 coords not " << coords.size() << std::endl;
+          std::cerr << "ERROR: Need an \"x,y,z\" argument to define centre point - need 3 coords not " << coords.size() << std::endl;
           exit(4);
       }
 
@@ -793,8 +793,8 @@ int mesherCGAL::run(CGALSettings& settings) {
       Point_inside_polyhedron organ_pip(*region_ips[organ]);
       if (!organ_pip(*centre))
       {
-          std::cerr << "Centre lies outside organ" << std::endl;
-          exit(3);
+          std::cerr << "ERROR: Centre lies outside organ" << std::endl;
+          exit(2);
       }
   } else if (centre != NULL) {
       bbox_p = new Iso_cuboid(
@@ -806,8 +806,8 @@ int mesherCGAL::run(CGALSettings& settings) {
           centre->z() + bounding_radius
       );
   } else {
-      std::cerr << "No centre defined and no organ to guess from" << std::endl;
-      exit(2);
+      std::cerr << "ERROR: No centre defined and no organ to guess from" << std::endl;
+      exit(3);
   }
   const Iso_cuboid& bbox(*bbox_p);
 
@@ -854,8 +854,8 @@ int mesherCGAL::run(CGALSettings& settings) {
 
   FT bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
   if (bbox_radius < 1e-12) {
-      std::cerr << "Extent must have non-zero diameter" << std::endl;
-      exit(1);
+      std::cerr << "ERROR: Extent must have non-zero diameter" << std::endl;
+      exit(3);
   }
   else if (bbox_radius > bounding_radius) {
       if (settings.has_bounding_radius())
