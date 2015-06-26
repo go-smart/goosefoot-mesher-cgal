@@ -33,7 +33,7 @@
 #  pragma warning(disable:4180) // qualifier applied to function type has no meaning; ignored
 #endif
 
-#include <CGAL/Labeled_mesh_domain_3.h>
+#include <CGAL/Mesh_3/Labeled_mesh_domain_3.h>
 
 namespace CGAL {
 
@@ -52,24 +52,24 @@ namespace CGAL {
  */
 template<class Function, class BGT>
 class Signed_mesh_domain_3
- : public Labeled_mesh_domain_3<Function, BGT >
+ : public Mesh_3::Labeled_mesh_domain_3<Function, BGT >
 {
 public:
   /// Base type
-  typedef Labeled_mesh_domain_3<Function, BGT> Base;
+  typedef Mesh_3::Labeled_mesh_domain_3<Function, BGT> Base;
 
   /// Public types
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Subdomain Subdomain;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Subdomain_index Subdomain_index;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Surface_patch Surface_patch;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Iso_cuboid_3  Iso_cuboid_3;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Segment_3  Segment_3;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Ray_3      Ray_3;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Line_3     Line_3;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Vector_3     Vector_3;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Surface_patch_index     Surface_patch_index;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Index     Index;
-  typedef typename Labeled_mesh_domain_3<Function, BGT>::Intersection     Intersection;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Subdomain Subdomain;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Subdomain_index Subdomain_index;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Surface_patch Surface_patch;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Iso_cuboid_3  Iso_cuboid_3;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Segment_3  Segment_3;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Ray_3      Ray_3;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Line_3     Line_3;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Vector_3     Vector_3;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Surface_patch_index     Surface_patch_index;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Index     Index;
+  typedef typename Mesh_3::Labeled_mesh_domain_3<Function, BGT>::Intersection     Intersection;
   typedef typename Base::Sphere_3 Sphere_3;
   typedef typename Base::Point_3 Point_3;
   typedef typename Base::FT FT;
@@ -404,7 +404,7 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        const Sphere_3& bounding_sphere,
                        const FT& error_bound,
                        CGAL::Random* p_rng)
-: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound, p_rng)
+: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound, p_rng)
 , signed_function_(f)
 , p_rng_(p_rng)
 , delete_rng_(false)
@@ -424,11 +424,11 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        const Bbox_3& bbox,
                        const FT& error_bound,
                        CGAL::Random* p_rng)
-: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
+: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
 , signed_function_(f)
 , p_rng_(p_rng)
 , delete_rng_(false)
-, squared_error_bound_(squared_error_bound(CGAL::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
+, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 {
   // TODO : CGAL_ASSERT(0 < f(bounding_sphere.get_center()) ) ?
   if(!p_rng_)
@@ -444,11 +444,11 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        const Iso_cuboid_3& bbox,
                        const FT& error_bound,
                        CGAL::Random* p_rng)
-: CGAL::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
+: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
 , signed_function_(f)
 , p_rng_(p_rng)
 , delete_rng_(false)
-, squared_error_bound_(squared_error_bound(CGAL::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
+, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 {
   // TODO : CGAL_ASSERT(0 < f( bbox.get_center()) ) ?
   if(!p_rng_)
