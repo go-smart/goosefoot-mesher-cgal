@@ -404,7 +404,7 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        const Sphere_3& bounding_sphere,
                        const FT& error_bound,
                        CGAL::Random* p_rng)
-: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound, p_rng)
+: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound)
 , signed_function_(f)
 , p_rng_(p_rng)
 , delete_rng_(false)
@@ -424,7 +424,7 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        const Bbox_3& bbox,
                        const FT& error_bound,
                        CGAL::Random* p_rng)
-: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
+: CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound)
 , signed_function_(f)
 , p_rng_(p_rng)
 , delete_rng_(false)
