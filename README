@@ -3,6 +3,9 @@ CGAL-MESHER-CORE
 
 This open source (GPL) tool is used as a standalone binary in several projects to provide meshing for RFA ablation procedures using CGAL, an advanced tetrahedral meshing suite.
 
+This project is co-funded by: European Commission under grant agreement no. 600641.
+http://www.gosmart-project.eu/
+
 DEPENDENCIES
 ------------
 
