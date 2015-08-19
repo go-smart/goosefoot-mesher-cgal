@@ -967,10 +967,10 @@ int mesherCGAL::run(CGALSettings& settings) {
       else if (mark_zone_boundaries)
       {
           /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
-          BOOST_FOREACH(std::vector<int>::value_type& zone_id, zones) {
-              if (spi.first == zone_id || spi.second == zone_id)
+          BOOST_FOREACH(const zone_pip_map::value_type& zone_pair, zone_pips) {
+              if (spi.first == zone_pair.first || spi.second == zone_pair.first)
               {
-                  id = zone_id;
+                  id = zone_pair.first;
                   break;
               }
           }
