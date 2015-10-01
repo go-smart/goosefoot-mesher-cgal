@@ -529,6 +529,10 @@ public:
                     {
                         return -activity_sphere->second->i;
                     }
+                    else
+                    {
+                        std::cout << "Inside activity sphere" << std::endl;
+                    }
                 }
                 break;
             }
