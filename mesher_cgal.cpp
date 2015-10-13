@@ -494,7 +494,7 @@ public:
     {
     }
 
-    return_type operator()(const Point_3& p, const bool = true) const
+    return_type signed_domain(const Point_3& p, const bool = true) const
     {
         int zone = default_zone_;
 
@@ -529,10 +529,6 @@ public:
                     {
                         return -activity_sphere->second->i;
                     }
-                    else
-                    {
-                        std::cout << "Inside activity sphere" << std::endl;
-                    }
                 }
                 break;
             }
@@ -541,6 +537,13 @@ public:
             zone += 1;
 
         return zone;
+    }
+
+    return_type operator()(const Point_3& p, const bool = true) const
+    {
+        return_type i = signed_domain(p);
+        return i;
+        //return i < 0 ? 0 : i;
     }
 
 protected:
