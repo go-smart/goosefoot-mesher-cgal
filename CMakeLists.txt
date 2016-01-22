@@ -98,11 +98,12 @@ IF (Boost_FOUND)
     INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
     ADD_DEFINITIONS( "-DHAS_BOOST" )
 ENDIF()
-#find_package(Boost COMPONENTS thread program_options filesystem required)
 if (MSVC)
 	include_directories(../interface/msvc/include)
 	SET(CMAKE_INCLUDE_PATH ${CMAKE_INCLUDE_PATH} "C:/Boost")
 	SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Boost/lib32-msvc")
+else (MSVC)
+        find_package(Boost COMPONENTS thread program_options filesystem required)
 endif(MSVC)
 
 
