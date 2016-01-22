@@ -738,7 +738,11 @@ int mesherCGAL::run(CGALSettings& settings) {
               zone_activity_spheres[id]->r = settings.zone(i).activity().r();
               zone_activity_spheres[id]->i = settings.zone(i).inactivity_index();
               zones.push_back(zone_activity_spheres[id]->i);
-              std::cout << "[" << zone_activity_spheres[id]->i << ":" << zone_activity_spheres[id]->r << "]";
+              std::cout << "[" << zone_activity_spheres[id]->i <<
+                  ":(" << zone_activity_spheres[id]->centre->x() <<
+                  "," << zone_activity_spheres[id]->centre->y() <<
+                  "," << zone_activity_spheres[id]->centre->z() <<
+                  "):" << zone_activity_spheres[id]->r << "]";
           }
           std::cout << " ";
       }
