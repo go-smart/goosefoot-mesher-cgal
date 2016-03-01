@@ -62,78 +62,11 @@ elseif (CMAKE_COMPILER_IS_GNUCXX)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wextra")
 endif()
 
+include_directories(include)
+
 find_package(Protobuf REQUIRED)
-PROTOBUF_GENERATE_CPP(CGAL_SETTINGS_PROTO_SRC CGAL_SETTINGS_PROTO_HEADER cgalsettings.proto)
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+PROTOBUF_GENERATE_CPP(CGAL_SETTINGS_PROTO_SRC CGAL_SETTINGS_PROTO_HEADER pb/cgalsettings.proto)
 set(CGAL_SETTINGS_PROTO_HEADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/../MeshGenCGAL)
-include_directories(${CGAL_SETTINGS_PROTO_HEADER_DIR})
 
-
-#set ( Boost_USE_STATIC_LIBS OFF )
-#set ( Boost_USE_MULTITHREADED ON )
-#set ( Boost_USE_STATIC_RUNTIME OFF )
-#include_directories(../../include)
-#include_directories(../../../Triangulation_3/include)
-#include_directories(../../../STL_Extension/include)
-#include_directories(../../../AABB_tree/include)
-add_definitions(-DCGAL_MESH_3_NO_DEPRECATED_SURFACE_INDEX
-                -DCGAL_MESH_3_VERBOSE
-                -DCGAL_MESH_3_NO_DEPRECATED_C3T3_ITERATORS)
-
-if ( MESH_3_VERBOSE )
-  add_definitions(-DCGAL_MESH_3_VERBOSE)
-endif()
-find_package(CGAL COMPONENTS ImageIO)
-include( ${CGAL_USE_FILE} )
-
-
-find_package(VTK REQUIRED)
-include(${VTK_USE_FILE})
-
-
-include_directories (BEFORE include)
-if (MSVC)
-    find_package(Boost)
-    IF (Boost_FOUND)
-        INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
-        ADD_DEFINITIONS( "-DHAS_BOOST" )
-    ENDIF()
-	include_directories(../interface/msvc/include)
-	SET(CMAKE_INCLUDE_PATH ${CMAKE_INCLUDE_PATH} "C:/Boost")
-	SET(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} "C:/Boost/lib32-msvc")
-else (MSVC)
-    find_package(Boost COMPONENTS thread program_options filesystem REQUIRED)
-    INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
-endif(MSVC)
-
-
-add_library(numa-mesher-cgal STATIC
-    mesher_cgal.cpp
-    #visualization.cpp
-    simplify.cpp
-    ${CGAL_SETTINGS_PROTO_SRC}
-)
-target_link_libraries(numa-mesher-cgal ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} ${PROTOBUF_LIBRARY})
-
-if(VTK_LIBRARIES)
-  target_link_libraries(numa-mesher-cgal ${VTK_LIBRARIES})
-else()
-  target_link_libraries(numa-mesher-cgal vtkHybrid)
-endif()
-
-add_executable(mesher_cgal.pb main_pb.cpp)
-target_link_libraries(mesher_cgal.pb numa-mesher-cgal)
-
-if (NOT MSVC)
-    add_executable(mesher_cgal main.cpp)
-    target_link_libraries(mesher_cgal numa-mesher-cgal boost_program_options boost_filesystem)
-    INSTALL(TARGETS mesher_cgal RUNTIME DESTINATION "bin" LIBRARY DESTINATION "lib") 
-endif()
-
-
-if(MSVC)
-	INSTALL(TARGETS mesher_cgal.pb RUNTIME DESTINATION "bin" ARCHIVE DESTINATION "lib") 
-#	INSTALL(FILES mesher_cgal.pb.exe DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-#	INSTALL(FILES libmesher_cgal.lib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
-endif()
+add_subdirectory(lib)
+add_subdirectory(src)
