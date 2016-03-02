@@ -8,10 +8,8 @@ endif()
 find_package(CGAL COMPONENTS ImageIO)
 include( ${CGAL_USE_FILE} )
 
-
 find_package(VTK REQUIRED)
 include(${VTK_USE_FILE})
-
 
 include_directories (BEFORE include)
 if (MSVC)
@@ -28,12 +26,16 @@ else (MSVC)
     INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 endif(MSVC)
 
+find_package(Protobuf REQUIRED)
+PROTOBUF_GENERATE_CPP(CGAL_SETTINGS_PROTO_SRC CGAL_SETTINGS_PROTO_HEADER ${PROTOBUF_DIR}/cgalsettings.proto)
+get_filename_component(CGAL_SETTINGS_PROTO_INCLUDE_DIR ${CGAL_SETTINGS_PROTO_HEADER} DIRECTORY)
+
+message(${CGAL_SETTINGS_PROTO_SRC})
 add_library(numa-mesher-cgal STATIC
     mesher_cgal.cpp
     ${CGAL_SETTINGS_PROTO_SRC}
 )
-message(${CGAL_SETTINGS_PROTO_HEADER_DIR})
-target_include_directories(numa-mesher-cgal PUBLIC ${CGAL_SETTINGS_PROTO_HEADER_DIR})
+target_include_directories(numa-mesher-cgal PUBLIC ${CGAL_SETTINGS_PROTO_INCLUDE_DIR})
 target_link_libraries(numa-mesher-cgal ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} ${PROTOBUF_LIBRARY})
 
 if(VTK_LIBRARIES)

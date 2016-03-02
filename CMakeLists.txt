@@ -64,9 +64,7 @@ endif()
 
 include_directories(include)
 
-find_package(Protobuf REQUIRED)
-PROTOBUF_GENERATE_CPP(CGAL_SETTINGS_PROTO_SRC CGAL_SETTINGS_PROTO_HEADER pb/cgalsettings.proto)
-set(CGAL_SETTINGS_PROTO_HEADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/../MeshGenCGAL)
+set(PROTOBUF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/pb)
 
 add_subdirectory(lib)
 add_subdirectory(src)
