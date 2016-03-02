@@ -43,6 +43,10 @@
 #ifndef Mesh_3_example_write_c3t3_to_gmsh_file_h
 #define Mesh_3_example_write_c3t3_to_gmsh_file_h
 
+#include "mesher_cgal.h"
+
+#include <map>
+
 namespace CGAL {
     template<class C3t3, class Polyhedron>
     bool write_c3t3_to_gmsh_file(const C3t3 &c3t3, std::map<typename C3t3::Triangulation::Facet,int>& boundary_indices, const std::string &file_name, bool decrement_zone=false, bool number_from_zero=false)
@@ -51,11 +55,9 @@ namespace CGAL {
         typedef typename C3t3::Cells_in_complex_iterator Cell_iterator;
         typedef typename C3t3::Facets_in_complex_iterator Facet_iterator;
         typedef typename Tr::Finite_vertices_iterator Vertex_iterator;
-        typedef typename Polyhedron::Halfedge_around_facet_circulator Halfedge_circulator;
 
         // Domain
         typedef Exact_predicates_inexact_constructions_kernel K;
-        typedef K::FT FT;
         typedef K::Point_3 Point;
 
         // check that file extension is "msh"

@@ -366,8 +366,8 @@ protected:
   FT squared_error_bound_;
 
 private:
-  bool delete_rng_;
   CGAL::Random* p_rng_;
+  bool delete_rng_;
 
 private:
   // Disabled copy constructor & assignment operator
@@ -406,9 +406,9 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        CGAL::Random* p_rng)
 : CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bounding_sphere, error_bound)
 , signed_function_(f)
+, squared_error_bound_(squared_error_bound(bounding_sphere,error_bound))
 , p_rng_(p_rng)
 , delete_rng_(false)
-, squared_error_bound_(squared_error_bound(bounding_sphere,error_bound))
 {
   // TODO : CGAL_ASSERT(0 < f(bounding_sphere.get_center()) ) ?
   if(!p_rng_)
@@ -426,9 +426,9 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        CGAL::Random* p_rng)
 : CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound)
 , signed_function_(f)
+, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 , p_rng_(p_rng)
 , delete_rng_(false)
-, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 {
   // TODO : CGAL_ASSERT(0 < f(bounding_sphere.get_center()) ) ?
   if(!p_rng_)
@@ -446,9 +446,9 @@ Signed_mesh_domain_3<F,BGT>::Signed_mesh_domain_3(
                        CGAL::Random* p_rng)
 : CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>(f, bbox, error_bound, p_rng)
 , signed_function_(f)
+, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 , p_rng_(p_rng)
 , delete_rng_(false)
-, squared_error_bound_(squared_error_bound(CGAL::Mesh_3::Labeled_mesh_domain_3<F, BGT>::bounding_box(),error_bound))
 {
   // TODO : CGAL_ASSERT(0 < f( bbox.get_center()) ) ?
   if(!p_rng_)
