@@ -33,7 +33,6 @@ get_filename_component(CGAL_SETTINGS_PROTO_INCLUDE_DIR ${CGAL_SETTINGS_PROTO_HEA
 message(${CGAL_SETTINGS_PROTO_SRC})
 add_library(numa-mesher-cgal STATIC
     mesher_cgal.cpp
-    copy_polyhedron.cpp
     ${CGAL_SETTINGS_PROTO_SRC}
 )
 target_include_directories(numa-mesher-cgal PUBLIC ${CGAL_SETTINGS_PROTO_INCLUDE_DIR})

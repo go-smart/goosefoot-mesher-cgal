@@ -68,14 +68,13 @@ public:
   }
 
   /// Returns size
-  FT operator()(const Point_3& q, const int dim, const Index& index) const
+  FT operator()(const Point_3& q, const int , const Index& ) const
   {
       Point_3 p(
               min_(max_(q.x(), bbox_.xmin()), bbox_.xmax()),
               min_(max_(q.y(), bbox_.ymin()), bbox_.ymax()),
               min_(max_(q.z(), bbox_.zmin()), bbox_.zmax())
       );
-      std::vector<int> *tup = new std::vector<int>;
       int x = (int)(p.x()/granularity_);
       int y = (int)(p.y()/granularity_);
       int z = (int)(p.z()/granularity_);

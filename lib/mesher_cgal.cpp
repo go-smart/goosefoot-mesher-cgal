@@ -84,8 +84,6 @@ typedef std::map< int, Exact_polyhedron* > zone_ep_map;
 typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
 
 typedef CGAL::Signed_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_implicit;
-typedef CGAL::Mesh_triangulation_3<Mesh_domain_implicit>::type Exact_Tr;
-typedef CGAL::Mesh_complex_3_in_triangulation_3<Exact_Tr> Exact_C3t3;
 
 #include <sstream>
 #include <functional>
@@ -194,11 +192,7 @@ int mesherCGAL::run(CGALSettings& settings) {
       std::cout << "Centre is set at (" << centre->x() << ", " << centre->y() << ", " << centre->z() << ")" << std::endl;
   }
 
-  bool output_medit, output_gmsh;
-
-  output_medit = settings.output_medit();
   number_from_zero = settings.number_from_zero();
-  output_gmsh = settings.output_gmsh();
   include_centre = settings.dense_centre();
   omit_needle_tree = settings.omit_needle_tree();
   include_boundary_tree = settings.boundary_tree();
@@ -477,13 +471,6 @@ int mesherCGAL::run(CGALSettings& settings) {
 
   std::cout << " Done" << std::endl;
 
-  if (output_medit) {
-      std::cout << "Write to MEDIT" << std::endl;
-      std::ofstream file_medit((output_prefix + ".msh").c_str());
-      c3t3.output_to_medit(file_medit);
-      file_medit.close();
-  }
-
   C3t3::Facets_in_complex_iterator fit, end;
   fit = c3t3.facets_in_complex_begin();
   end = c3t3.facets_in_complex_end();
@@ -544,10 +531,8 @@ int mesherCGAL::run(CGALSettings& settings) {
   }
 
 
-  if (output_gmsh) {
-      std::cout << "Write to GMSH" << std::endl;
-      CGAL::write_c3t3_to_gmsh_file<C3t3,Polyhedron>(c3t3, boundary_indices, output_prefix + ".msh", (default_zone_id == 0), number_from_zero);
-  }
+  std::cout << "Write to GMSH" << std::endl;
+  CGAL::write_c3t3_to_gmsh_file<C3t3,Polyhedron>(c3t3, boundary_indices, output_prefix + ".msh", (default_zone_id == 0), number_from_zero);
 
   std::cout << "Complete" << std::endl;
 

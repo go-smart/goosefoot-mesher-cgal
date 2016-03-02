@@ -78,5 +78,12 @@ namespace mesherCGAL {
 
     int simplify(Polyhedron& boundary);
     int run(CGALSettings& settings);
+
+    struct activity_sphere {
+        K::Point_3* centre;
+        float r;
+        int i;
+    };
 }
+
 #endif

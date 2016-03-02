@@ -23,7 +23,7 @@
 
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
-#include <CGAL/AABB_polyhedron_triangle_primitive.h>
+#include <CGAL/AABB_face_graph_triangle_primitive.h>
 #include <CGAL/Random.h>
 #include <CGAL/point_generators_3.h>
 #include <boost/logic/tribool.hpp>
@@ -38,7 +38,7 @@ protected:
   //the status indicates whether the query point is strictly inside the polyhedron, and the number of intersected triangles if yes
   std::pair<boost::logic::tribool,std::size_t>& m_status;
   bool m_stop;
-  typedef CGAL::AABB_polyhedron_triangle_primitive<Kernel,Polyhedron_3> Primitive;
+  typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron_3> Primitive;
 
 public:
   Ray_3_Triangle_3_traversal_traits(std::pair<boost::logic::tribool,std::size_t>& status)
@@ -219,7 +219,7 @@ public:
 template <class Polyhedron_3,class Kernel>
 class Point_inside_polyhedron_3 {
 
-  typedef CGAL::AABB_polyhedron_triangle_primitive<Kernel,Polyhedron_3> Primitive;
+  typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron_3> Primitive;
   typedef CGAL::AABB_traits<Kernel, Primitive> Traits;
   typedef typename Traits::Bounding_box Bounding_box;
   typedef CGAL::AABB_tree<Traits> Tree;
@@ -243,7 +243,7 @@ public:
   Point_inside_polyhedron_3(Polyhedron_3& polyhedron, int N = 0, const Kernel& k=Kernel())
     : m_kernel(k), polyhedron(polyhedron), N(N)
   {
-    tree.insert(polyhedron.facets_begin(),polyhedron.facets_end());
+    tree.insert(polyhedron.facets_begin(),polyhedron.facets_end(), polyhedron);
     tree.build();
     if(N>0){
       initialize_grid();

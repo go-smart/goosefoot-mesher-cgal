@@ -301,14 +301,14 @@ void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
     reader->SetFileName(filename.c_str());
     reader->Update();
 
-    char tmpnamebuffer[L_tmpnam];
-    tmpnam(tmpnamebuffer);
+    char tmpnamebuffer[128] = "/tmp/.gssfmesher-XXXXXX.stl";
+    FILE* f;
+    int fd;
 
-    std::string tmpname(tmpnamebuffer);
     vtkSmartPointer<vtkSTLWriter> writer =
         vtkSmartPointer<vtkSTLWriter>::New();
 
-    writer->SetFileName(tmpname.c_str());
+    writer->WriteToOutputStringOn();
 #if VTK_MAJOR_VERSION >= 6
     writer->SetInputData(reader->GetOutput());
 #else
@@ -316,8 +316,18 @@ void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
 #endif
     writer->Write();
 
-    PolyhedronUtils::readSTLFile(tmpname, p);
+    if ((fd = mkstemp(tmpnamebuffer)) == -1 || !(f = fdopen(fd, "w"))) {
+        std::cerr << ("Could not create temporary file!") << std::endl;
+        exit(-9);
+    }
+
+    fwrite(writer->GetOutputString(), sizeof(char), writer->GetOutputStringLength(), f);
+    fclose(f);
+
+    PolyhedronUtils::readSTLFile(tmpnamebuffer, p);
+    remove(tmpnamebuffer);
 }
+
 void PolyhedronUtils::readVTKFile(std::string filename, Exact_polyhedron& p)
 {
     vtkSmartPointer<vtkPolyDataReader> reader =
@@ -341,6 +351,7 @@ void PolyhedronUtils::readVTKFile(std::string filename, Exact_polyhedron& p)
     writer->Write();
 
     PolyhedronUtils::readSTLFile(tmpname, p);
+    remove(tmpnamebuffer);
 }
 //-----------------------------------------------------------------------------
 void PolyhedronUtils::readSTLFile(std::string filename, Exact_polyhedron& p)
