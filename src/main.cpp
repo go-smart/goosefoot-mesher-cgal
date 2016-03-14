@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "mesher_cgal.h"
+#include "mesher_cgal_app.h"
 
 #include <boost/foreach.hpp>
 #include <boost/program_options.hpp>
@@ -247,22 +247,14 @@ int main(int argc, char* argv[])
     temp_settings_fd.close();
   }
 
-  //if (!vm["combined_surface"].empty()) {
-  //    combined = parse_region(region_files, combined_file);
-  //    std::cout << " - Combined : " << combined << std::endl;
-  //}
+  int err;
 
-  //if (!vm["boundary_surface"].empty()) {
-  //    boundary_id = parse_region(region_files, boundary_file);
-  //    std::cout << " - Boundary : " << boundary_id << std::endl;
-  //}
+  mesherCGAL::MesherCGAL mesher(settings);
+  if ((err = mesher.init()))
+      exit(err);
 
-  //if (!vm["structures_surfaces"].empty()) {
-  //    structures = parse_region(region_files, structures_file);
-  //    std::cout << " - Structures : " << structures << std::endl;
-  //}
+  if ((err = mesher.run()))
+      exit(err);
 
-  mesherCGAL::run(settings);
+  return 0;
 }
-
-

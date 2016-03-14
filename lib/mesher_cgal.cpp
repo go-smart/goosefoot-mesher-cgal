@@ -18,72 +18,17 @@
  */
 
 #include "copy_polyhedron.h"
-#include "mesher_cgal.h"
+#include "mesher_cgal_app.h"
 
-double EPS = 0.00001;
-
-using namespace mesherCGAL;
-
-template <typename Refs>
-struct MyFace : public CGAL::HalfedgeDS_face_base<Refs> {
-    int boundary_index;
-};
-
-struct MyItems : public CGAL::Polyhedron_items_3 {
-    template <typename Refs, typename Traits>
-    struct Face_wrapper {
-        typedef MyFace<Refs> Face;
-    };
-};
-
-typedef K::Triangle_3 Triangle;
-typedef K::Plane_3 Plane;
-typedef K::Vector_3 Vector;
-typedef K::Segment_3 Segment;
-typedef K::Iso_cuboid_3 Iso_cuboid;
-
+// [B]
+//
 // Tree
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
-typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron> Primitive;
-typedef CGAL::AABB_traits<K, Primitive> Traits;
-typedef CGAL::AABB_tree<Traits> Tree;
-
-typedef CGAL::AABB_face_graph_triangle_primitive<Exact_polyhedron> Exact_Primitive;
-typedef CGAL::AABB_traits<Exact_Kernel, Exact_Primitive> Exact_Traits;
-typedef CGAL::AABB_tree<Exact_Traits> Exact_Tree;
-
-// Triangulation
-typedef CGAL::Mesh_triangulation_3<Mesh_domain>::type Tr;
-typedef CGAL::Mesh_complex_3_in_triangulation_3<Tr> C3t3;
-
-// Criteria
-typedef CGAL::Mesh_criteria_3<Tr> Mesh_criteria;
-
-// To avoid verbose function and named parameters call
-using namespace CGAL::parameters;
-
-typedef std::map< int, struct activity_sphere* > zone_activity_sphere_map;
-typedef std::map< int, int > region_boundary_count_map;
-typedef std::map< int, std::string > region_string_map;
-typedef std::map< int, Exact_polyhedron* > region_ep_map;
-typedef std::map< int, Polyhedron* > region_ip_map;
-typedef std::map< int, Exact_Tree* > region_tree_map;
-
-typedef std::map< int, std::string > zone_string_map;
-typedef std::map< int, Polyhedron* > zone_ip_map;
-typedef std::map< int, Exact_polyhedron* > zone_ep_map;
-
-#include "zone_priority_sorting.h"
-
-#include "Signed_mesh_domain_3.h"
-#include "implicit_zone_function.h"
-
+// ]A]
 #include <CGAL/Point_inside_polyhedron_3.h>
-typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
-
-typedef CGAL::Signed_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_implicit;
+// [C]
 
 #include <sstream>
 #include <functional>
@@ -140,353 +85,338 @@ typedef CGAL::Signed_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_i
 #include "parse_region.h"
 #include "write_c3t3_to_gmsh_file.h"
 
+// [B]
+using namespace mesherCGAL;
+
+template <typename Refs>
+struct MyFace : public CGAL::HalfedgeDS_face_base<Refs> {
+    int boundary_index;
+};
+
+struct MyItems : public CGAL::Polyhedron_items_3 {
+    template <typename Refs, typename Traits>
+    struct Face_wrapper {
+        typedef MyFace<Refs> Face;
+    };
+};
+
+typedef K::Triangle_3 Triangle;
+typedef K::Plane_3 Plane;
+typedef K::Vector_3 Vector;
+typedef K::Segment_3 Segment;
+typedef K::Iso_cuboid_3 Iso_cuboid;
+// End [B]
+
+// [A]
+typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron> Primitive;
+typedef CGAL::AABB_traits<K, Primitive> Traits;
+typedef CGAL::AABB_tree<Traits> Tree;
+
+typedef CGAL::AABB_face_graph_triangle_primitive<Exact_polyhedron> Exact_Primitive;
+typedef CGAL::AABB_traits<Exact_Kernel, Exact_Primitive> Exact_Traits;
+typedef CGAL::AABB_tree<Exact_Traits> Exact_Tree;
+
+// Criteria
+typedef CGAL::Mesh_criteria_3<Tr> Mesh_criteria;
+
+// To avoid verbose function and named parameters call
+using namespace CGAL::parameters;
+
+typedef std::map< int, int > region_boundary_count_map;
+typedef std::map< int, std::string > region_string_map;
+typedef std::map< int, Exact_Tree* > region_tree_map;
+
+typedef std::map< int, std::string > zone_string_map;
+typedef std::map< int, Exact_polyhedron* > zone_ep_map;
+// End [A]
+// [C]
+typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
+// End[C]
+
 // Criteria
 typedef CGAL::Mesh_criteria_3<Tr> Exact_Mesh_criteria;
 
-int mesherCGAL::run(CGALSettings& settings) {
-
-  std::string output_prefix("gsmesh.out");
-  bool include_boundary_tree = false, omit_needle_tree = false, omit_zone_tree = false, include_needle = false,
-       include_centre = false, solid_zone = false, mark_zone_boundaries = false;
-  bool number_from_zero = false;
-  float nearfield, farfield, zonefield;
-  float granularity = 1., centre_radius = 1., bounding_radius = 50., zone_radius = 0.;
-  region_string_map region_files;
-  zone_string_map zone_files;
-  region_ip_map region_ips;
-  region_ep_map region_eps;
-  zone_ip_map zone_ips;
-  zone_ep_map zone_eps;
-  zone_cls_map zone_cls;
-  zone_cls_map zone_priorities;
-  zone_activity_sphere_map zone_activity_spheres;
-  std::vector< int > vessels;
-  std::vector< int > needles;
-  std::vector< int > zones, polyhedral_zones;
-  int organ, extent;
-  int default_zone_id;
-
-  include_needle = settings.needles_size() > 0;
-
-  std::string settings_string;
-  google::protobuf::TextFormat::PrintToString(settings, &settings_string);
-
-  if (settings.dump_settings()) {
+int mesherCGAL::MesherCGAL::init() {
+  std::string _settings_string;
+  google::protobuf::TextFormat::PrintToString(_settings, &_settings_string);
+  if (_settings.dump_settings()) {
       std::cout << "LOADED SETTINGS FROM PROTOBUF" << std::endl
           << "+++++++++++++++++++++++++++++++" << std::endl
-          << settings_string
+          << _settings_string
           << "+++++++++++++++++++++++++++++++" << std::endl << std::endl;
   }
-
   std::vector<float> coords;
-  Point* centre = NULL;
 
-  if (settings.centre_size() > 0) {
-      if (settings.centre_size() != 3) {
+  if (_settings.centre_size() > 0) {
+      if (_settings.centre_size() != 3) {
           std::cerr << "ERROR: Need an \"x,y,z\" argument to define centre point - need 3 coords not " << coords.size() << std::endl;
           exit(4);
       }
 
-      centre = new Point(settings.centre(0), settings.centre(1), settings.centre(2));
+      _centre = new Point(_settings.centre(0), _settings.centre(1), _settings.centre(2));
 
-      std::cout << "Centre is set at (" << centre->x() << ", " << centre->y() << ", " << centre->z() << ")" << std::endl;
+      std::cout << "Centre is set at (" << _centre->x() << ", " << _centre->y() << ", " << _centre->z() << ")" << std::endl;
   }
+  if (!_settings.has_granularity())
+      _settings.set_granularity(1.);
+  if (!_settings.has_bounding_radius())
+      _settings.set_bounding_radius(50.);
 
-  number_from_zero = settings.number_from_zero();
-  include_centre = settings.dense_centre();
-  omit_needle_tree = settings.omit_needle_tree();
-  include_boundary_tree = settings.boundary_tree();
-  omit_zone_tree = settings.omit_zone_tree();
+  return 0;
+}
 
-  nearfield = settings.near_field();
-  farfield = settings.far_field();
-  zonefield = settings.zone_field();
-  zone_radius = settings.zone_radius();
-
-  if (settings.has_granularity())
-      granularity = settings.granularity();
-  else
-      granularity = 1.;
-
-  output_prefix = settings.output_prefix();
-
-  centre_radius = settings.centre_radius();
-  default_zone_id = settings.tissue_id();
-  bounding_radius = settings.bounding_radius();
-  if (settings.has_mark_zone_boundaries())
-      mark_zone_boundaries = settings.mark_zone_boundaries();
-  if (settings.has_solid_zone())
-      solid_zone = settings.solid_zone();
+int mesherCGAL::MesherCGAL::setup_regions() {
+  region_string_map region_files;
+  zone_string_map zone_files;
+  zone_ep_map zone_eps;
 
   std::cout << "Finding regions : " << std::endl;
-
-  bool include_organ = settings.has_organ_file();
-
-  if (include_organ) {
-      organ = settings.organ_index();
-      region_files[organ] = settings.organ_file();
-      std::cout << " - Organ : " << organ << std::endl;
+  if (_settings.has_organ_file()) {
+      region_files[_settings.organ_index()] = _settings.organ_file();
+      std::cout << " - Organ : " << _settings.organ_index() << std::endl;
   }
-
-  extent = settings.extent_index();
-  std::cout << " - Extent : " << extent << std::endl;
-
-  include_needle = settings.needles_size() > 0;
-  if (include_needle) {
+  std::cout << " - Extent : " << _settings.extent_index() << std::endl;
+  if (_settings.needles_size() > 0) {
       std::cout << " - Needles : " << std::endl << "   \\ ";
-      for (int i = 0 ; i < settings.needles_size() ; i++) {
-          int id = settings.needles_index(i);
-          region_files[id] = settings.needles(i);
+      for (int i = 0 ; i < _settings.needles_size() ; i++) {
+          int id = _settings.needles_index(i);
+          region_files[id] = _settings.needles(i);
           needles.push_back(id);
           std::cout << id << " ";
       }
       std::cout << std::endl;
   }
-
-  if (settings.vessels_size()) {
+  if (_settings.vessels_size()) {
       std::cout << " - Vessels : " << std::endl << "   \\ ";
-      for (int i = 0 ; i < settings.vessels_size() ; i++) {
-          int id = settings.vessels_index(i);
-          region_files[id] = settings.vessels(i);
+      for (int i = 0 ; i < _settings.vessels_size() ; i++) {
+          int id = _settings.vessels_index(i);
+          region_files[id] = _settings.vessels(i);
           vessels.push_back(id);
           std::cout << id << " ";
       }
       std::cout << std::endl;
   }
-
-  if (settings.zones_size() || settings.zone_size()) {
+  if (_settings.zones_size() || _settings.zone_size()) {
       std::cout << " - Zones : " << std::endl << "   \\ ";
-      for (int i = 0 ; i < settings.zones_size() ; i++) {
-          int id = settings.zones_index(i);
-          zone_files[id] = settings.zones(i);
+      for (int i = 0 ; i < _settings.zones_size() ; i++) {
+          int id = _settings.zones_index(i);
+          zone_files[id] = _settings.zones(i);
           zones.push_back(id);
           polyhedral_zones.push_back(id);
-          zone_cls[id] = zonefield;
-          zone_priorities[id] = 0.0;
+          _zone_cls[id] = _settings.zone_field();
+          _zone_priorities[id] = 0.0;
           std::cout << id << " ";
       }
-      for (int i = 0 ; i < settings.zone_size() ; i++) {
-          int id = settings.zone(i).index();
-          zone_files[id] = settings.zone(i).file();
+      for (int i = 0 ; i < _settings.zone_size() ; i++) {
+          int id = _settings.zone(i).index();
+          zone_files[id] = _settings.zone(i).file();
           zones.push_back(id);
           polyhedral_zones.push_back(id);
           std::cout << id;
 
-          if (settings.zone(i).has_characteristic_length()) {
-              zone_cls[id] = settings.zone(i).characteristic_length();
-              std::cout << "(" << zone_cls[id] << ")";
+          if (_settings.zone(i).has_characteristic_length()) {
+              _zone_cls[id] = _settings.zone(i).characteristic_length();
+              std::cout << "(" << _zone_cls[id] << ")";
           }
           else {
-              zone_cls[id] = zonefield;
+              _zone_cls[id] = _settings.zone_field();
           }
 
-          if (settings.zone(i).has_priority()) {
-              zone_priorities[id] = settings.zone(i).priority();
-              if (fabs(zone_priorities[id]) > 1e-10)
-                  std::cout << "<" << zone_priorities[id] << ">";
+          if (_settings.zone(i).has_priority()) {
+              _zone_priorities[id] = _settings.zone(i).priority();
+              if (fabs(_zone_priorities[id]) > 1e-10)
+                  std::cout << "<" << _zone_priorities[id] << ">";
           }
           else {
-              zone_priorities[id] = 0.0;
+              _zone_priorities[id] = 0.0;
           }
 
-          if (settings.zone(i).has_activity() && settings.zone(i).has_inactivity_index()) {
-              zone_activity_spheres[id] = new struct activity_sphere;
+          if (_settings.zone(i).has_activity() && _settings.zone(i).has_inactivity_index()) {
+              _zone_activity_spheres[id] = new struct activity_sphere;
               double
-                  x = settings.zone(i).activity().x(),
-                  y = settings.zone(i).activity().y(),
-                  z = settings.zone(i).activity().z();
-              if (centre != NULL)
+                  x = _settings.zone(i).activity().x(),
+                  y = _settings.zone(i).activity().y(),
+                  z = _settings.zone(i).activity().z();
+              if (_centre != NULL)
               {
-                  x += centre->x();
-                  y += centre->y();
-                  z += centre->z();
+                  x += _centre->x();
+                  y += _centre->y();
+                  z += _centre->z();
               }
-              zone_activity_spheres[id]->centre = new Point(x, y, z);
-              zone_activity_spheres[id]->r = settings.zone(i).activity().r();
-              zone_activity_spheres[id]->i = settings.zone(i).inactivity_index();
-              zones.push_back(zone_activity_spheres[id]->i);
-              std::cout << "[" << zone_activity_spheres[id]->i <<
-                  ":(" << zone_activity_spheres[id]->centre->x() <<
-                  "," << zone_activity_spheres[id]->centre->y() <<
-                  "," << zone_activity_spheres[id]->centre->z() <<
-                  "):" << zone_activity_spheres[id]->r << "]";
+              _zone_activity_spheres[id]->centre = new Point(x, y, z);
+              _zone_activity_spheres[id]->r = _settings.zone(i).activity().r();
+              _zone_activity_spheres[id]->i = _settings.zone(i).inactivity_index();
+              zones.push_back(_zone_activity_spheres[id]->i);
+              std::cout << "[" << _zone_activity_spheres[id]->i <<
+                  ":(" << _zone_activity_spheres[id]->centre->x() <<
+                  "," << _zone_activity_spheres[id]->centre->y() <<
+                  "," << _zone_activity_spheres[id]->centre->z() <<
+                  "):" << _zone_activity_spheres[id]->r << "]";
           }
           std::cout << " ";
       }
       std::cout << std::endl;
   }
 
-  ZonePrioritySorting zps(zone_priorities);
-  zone_pip_map zone_pips(zps);
-
-  if (settings.has_matching_tolerance()) {
-      EPS = settings.matching_tolerance();
-  }
-
   Polyhedron inexact_structures_polyhedron, inexact_combined_polyhedron, inexact_boundary_polyhedron;
-
   Exact_polyhedron exact_structures_polyhedron;
   Exact_polyhedron exact_boundary_polyhedron;
   Exact_polyhedron exact_combined_polyhedron;
-
   std::cout << "Loading (boundary) regions : " << std::endl << " - ";
   BOOST_FOREACH(const region_string_map::value_type& region_pair, region_files) {
       Exact_polyhedron* ep = new Exact_polyhedron();
       PolyhedronUtils::readSurfaceFile(region_pair.second, *ep);
-
-      region_eps[region_pair.first] = ep;
-
+      _region_eps[region_pair.first] = ep;
       std::cout << region_pair.first << " (" << ep->size_of_facets() << " facets) " << std::flush;
   }
   std::cout << std::endl;
-
   std::cout << "Loading zones : " << std::endl << " - ";
   BOOST_FOREACH(const zone_string_map::value_type& zone_pair, zone_files) {
       Exact_polyhedron* ep = new Exact_polyhedron();
       PolyhedronUtils::readSurfaceFile(zone_pair.second, *ep);
-      
       zone_eps[zone_pair.first] = ep;
-      if (mark_zone_boundaries)
-          region_eps[zone_pair.first] = ep;
-
+      if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
+          _region_eps[zone_pair.first] = ep;
       std::cout << zone_pair.first << " (" << ep->size_of_facets() << " facets) " << std::flush;
   }
   std::cout << std::endl;
-
-  if (include_organ) {
+  if (_settings.has_organ_file()) {
       Polyhedron* inexact_organ_polyhedron = new Polyhedron();
-      region_ips[organ] = inexact_organ_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*inexact_organ_polyhedron, *region_eps[organ]);
+      _region_ips[_settings.organ_index()] = inexact_organ_polyhedron;
+      poly_copy<Polyhedron,Exact_polyhedron>(*inexact_organ_polyhedron, *_region_eps[_settings.organ_index()]);
   }
-
-  Iso_cuboid* bbox_p = NULL;
-
-  if (include_organ) {
-      bbox_p = new Iso_cuboid(CGAL::bounding_box(region_ips[organ]->points_begin(), region_ips[organ]->points_end()));
-      if (centre == NULL)
-          centre = new Point(((*bbox_p)[0].x() + (*bbox_p)[7].x()) / 2,
-                             ((*bbox_p)[0].y() + (*bbox_p)[7].y()) / 2,
-                             ((*bbox_p)[0].z() + (*bbox_p)[7].z()) / 2);
-
-      Point_inside_polyhedron organ_pip(*region_ips[organ]);
-      if (!organ_pip(*centre))
-      {
-          std::cerr << "ERROR: Centre lies outside organ" << std::endl;
-          exit(2);
-      }
-  } else if (centre != NULL) {
-      bbox_p = new Iso_cuboid(
-          centre->x() - bounding_radius,
-          centre->y() - bounding_radius,
-          centre->z() - bounding_radius,
-          centre->x() + bounding_radius,
-          centre->y() + bounding_radius,
-          centre->z() + bounding_radius
-      );
-  } else {
-      std::cerr << "ERROR: No centre defined and no organ to guess from" << std::endl;
-      exit(3);
-  }
-  const Iso_cuboid& bbox(*bbox_p);
 
   BOOST_FOREACH(std::vector<int>::value_type& id, vessels) {
       Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
-      region_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*region_ips[id], *region_eps[id]);
+      _region_ips[id] = inexact_boundary_polyhedron;
+      poly_copy<Polyhedron,Exact_polyhedron>(*_region_ips[id], *_region_eps[id]);
   }
-
   BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
       Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
-      region_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*region_ips[id], *region_eps[id]);
+      _region_ips[id] = inexact_boundary_polyhedron;
+      poly_copy<Polyhedron,Exact_polyhedron>(*_region_ips[id], *_region_eps[id]);
   }
-
   BOOST_FOREACH(const zone_ep_map::value_type& zone_pair, zone_eps) {
       int id = zone_pair.first;
       Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
-      zone_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*zone_ips[id], *zone_eps[id]);
-      zone_pips[id] = new Point_inside_polyhedron(*zone_ips[id]);
+      _zone_ips[id] = inexact_boundary_polyhedron;
+      poly_copy<Polyhedron,Exact_polyhedron>(*_zone_ips[id], *zone_eps[id]);
+      _zone_pips[id] = new Point_inside_polyhedron(*_zone_ips[id]);
   }
 
-  if (zone_pips.size())
+  if (_zone_pips.size())
       std::cout << "Order of zones by priority:";
-  BOOST_FOREACH(zone_pip_map::value_type& v, zone_pips) {
+  BOOST_FOREACH(zone_pip_map::value_type& v, _zone_pips) {
       std::cout << " " << v.first;
   }
-  if (zone_pips.size())
+  if (_zone_pips.size())
       std::cout << std::endl;
 
-  Tree *boundary_tree = NULL;
-  if (include_boundary_tree) {
-      boundary_tree = new Tree();
-      boundary_tree->insert(region_ips[organ]->facets_begin(), region_ips[organ]->facets_end(), *region_ips[organ]);
+  if (_settings.boundary_tree()) {
+      _boundary_tree = new Tree();
+      _boundary_tree->insert(_region_ips[_settings.organ_index()]->facets_begin(), _region_ips[_settings.organ_index()]->facets_end(), *_region_ips[_settings.organ_index()]);
       BOOST_FOREACH(std::vector<int>::value_type& id, vessels) {
-          boundary_tree->insert(region_ips[id]->facets_begin(), region_ips[id]->facets_end(), *region_ips[id]);
+          _boundary_tree->insert(_region_ips[id]->facets_begin(), _region_ips[id]->facets_end(), *_region_ips[id]);
       }
   }
 
-  Implicit_zone_function<K> izf(region_ips, centre, bounding_radius, (include_organ ? &organ : NULL), &extent, vessels, needles, zone_pips,
-          zone_activity_spheres, default_zone_id);
+  return 0;
+}
 
-  FT bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
-  if (bbox_radius < 1e-12) {
+int mesherCGAL::MesherCGAL::calculate_bbox() {
+  if (_settings.has_organ_file()) {
+      _bbox_p = new Iso_cuboid(CGAL::bounding_box(_region_ips[_settings.organ_index()]->points_begin(), _region_ips[_settings.organ_index()]->points_end()));
+      if (_centre == NULL)
+          _centre = new Point(((*_bbox_p)[0].x() + (*_bbox_p)[7].x()) / 2,
+                             ((*_bbox_p)[0].y() + (*_bbox_p)[7].y()) / 2,
+                             ((*_bbox_p)[0].z() + (*_bbox_p)[7].z()) / 2);
+      Point_inside_polyhedron organ_pip(*_region_ips[_settings.organ_index()]);
+      if (!organ_pip(*_centre))
+      {
+          std::cerr << "ERROR: Centre lies outside organ" << std::endl;
+          return 1;
+      }
+  } else if (_centre != NULL) {
+      _bbox_p = new Iso_cuboid(
+          _centre->x() - _settings.bounding_radius(),
+          _centre->y() - _settings.bounding_radius(),
+          _centre->z() - _settings.bounding_radius(),
+          _centre->x() + _settings.bounding_radius(),
+          _centre->y() + _settings.bounding_radius(),
+          _centre->z() + _settings.bounding_radius()
+      );
+  } else {
+      std::cerr << "ERROR: No centre defined and no organ to guess from" << std::endl;
+      return 2;
+  }
+  const Iso_cuboid& bbox(*_bbox_p);
+  _bbox_radius = 1.01 * pow(CGAL::squared_distance(bbox[0], bbox[7]), .5) / 2;
+  if (_bbox_radius < 1e-12) {
       std::cerr << "ERROR: Extent must have non-zero diameter" << std::endl;
-      exit(3);
+      return 3;
   }
-  else if (bbox_radius > bounding_radius) {
-      if (settings.has_bounding_radius())
-          std::cout << "(1% padded) Radius of extent bounding box larging than requested bounding radius, using the bounding box radius" << std::endl;
+  else if (_bbox_radius > _settings.bounding_radius()) {
+      std::cout << "(1% padded) Radius of extent bounding box larging than requested bounding radius, using the bounding box radius" << std::endl;
   }
+   return 0;
+}
 
-  Mesh_domain_implicit domain(izf, K::Sphere_3(*centre, (FT)1.2*bbox_radius*bbox_radius), (FT)(bbox_radius * 2.e-5));
-
+int mesherCGAL::MesherCGAL::setup_domain_field() {
+  Implicit_zone_function<K> izf(_region_ips, _centre, _settings.bounding_radius(), _settings.has_organ_file(), _settings.organ_index(), _settings.has_extent_index(), _settings.extent_index(), vessels, needles, _zone_pips,
+          _zone_activity_spheres, _settings.tissue_id());
+  _domain = new Mesh_domain_implicit(izf, K::Sphere_3(*_centre, (FT)1.2*_bbox_radius*_bbox_radius), (FT)(_bbox_radius * 2.e-5));
   Tree *needle_tree = NULL;
-  if (include_needle) {
+  if (_settings.needles_size() > 0) {
       needle_tree = new Tree();
       BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
           Polyhedron* inexact_needle_polyhedron = new Polyhedron();
-          region_ips[id] = inexact_needle_polyhedron;
-          poly_copy<Polyhedron,Exact_polyhedron>(*inexact_needle_polyhedron, *region_eps[id]);
+          _region_ips[id] = inexact_needle_polyhedron;
+          poly_copy<Polyhedron,Exact_polyhedron>(*inexact_needle_polyhedron, *_region_eps[id]);
 
           needle_tree->insert(inexact_needle_polyhedron->facets_begin(), inexact_needle_polyhedron->facets_end(), *inexact_needle_polyhedron);
       }
   }
   zone_tree_map zone_trees;
-  if (!zone_ips.empty() && !omit_zone_tree) {
-      BOOST_FOREACH(const zone_ip_map::value_type& zone_pair, zone_ips) {
+  if (!_zone_ips.empty() && !_settings.omit_zone_tree()) {
+      BOOST_FOREACH(const zone_ip_map::value_type& zone_pair, _zone_ips) {
           int id = zone_pair.first;
           zone_trees[id] = new Tree();
-          zone_trees[id]->insert(zone_ips[id]->facets_begin(), zone_ips[id]->facets_end(), *zone_ips[id]);
+          zone_trees[id]->insert(_zone_ips[id]->facets_begin(), _zone_ips[id]->facets_end(), *_zone_ips[id]);
       }
   }
-  Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index> pdf(boundary_tree, nearfield, farfield, zone_cls, zone_radius, centre_radius,
-          (include_centre ? centre : NULL), (omit_needle_tree ? NULL : needle_tree), zone_trees, granularity, bbox,
-          (solid_zone ? &zone_pips : NULL));
+  _pdf = new Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index>(_boundary_tree, _settings.near_field(), _settings.far_field(), _zone_cls, _settings.zone_radius(), _settings.centre_radius(),
+          (_settings.dense_centre() ? _centre : NULL), (_settings.omit_needle_tree() ? NULL : needle_tree), zone_trees, _settings.granularity(), *_bbox_p,
+          (_settings.has_solid_zone() && _settings.solid_zone() ? &_zone_pips : NULL));
 
-  Mesh_criteria new_criteria(cell_size=pdf);
+  return 0;
+}
+
+int mesherCGAL::MesherCGAL::mesh() {
+  setup_domain_field();
+  Mesh_criteria new_criteria(cell_size=*_pdf);
 
   std::cout << "Tetrahedralizing..." << std::endl;
-  C3t3 c3t3 = CGAL::make_mesh_3<C3t3>(domain, new_criteria, features(domain), no_lloyd(), no_odt(), perturb(10000,1e-3));
+  _c3t3 = CGAL::make_mesh_3<C3t3>(*_domain, new_criteria, features(*_domain), no_lloyd(), no_odt(), perturb(10000,1e-3));
 
   std::cout << " Done" << std::endl;
 
-  C3t3::Facets_in_complex_iterator fit, end;
-  fit = c3t3.facets_in_complex_begin();
-  end = c3t3.facets_in_complex_end();
+  return 0;
+}
 
+int mesherCGAL::MesherCGAL::label_boundaries() {
+  C3t3::Facets_in_complex_iterator fit, end;
+  fit = _c3t3.facets_in_complex_begin();
+  end = _c3t3.facets_in_complex_end();
   std::cout << "Assigning boundary indices..." << std::endl;
   Exact_Point v[3];
   int l = 0, m = 0;
-  std::map<C3t3::Triangulation::Facet,int> boundary_indices;
   region_boundary_count_map region_boundary_count;
-
   for( ; fit != end ; ++fit)
   {
       l++;
-      if (l%1000 == 0) std::cout << " " << l << "/" << c3t3.number_of_facets_in_complex() << std::endl;
+      if (l%1000 == 0) std::cout << " " << l << "/" << _c3t3.number_of_facets_in_complex() << std::endl;
 
-      C3t3::Surface_patch_index spi = c3t3.surface_patch_index(*fit);
+      C3t3::Surface_patch_index spi = _c3t3.surface_patch_index(*fit);
 
       int id = -1;
 
@@ -499,10 +429,10 @@ int mesherCGAL::run(CGALSettings& settings) {
       else if (spi.second <= 0)
           id = -spi.second;
       /* This facet is an internal boundary */
-      else if (mark_zone_boundaries)
+      else if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
       {
           /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
-          BOOST_FOREACH(const zone_pip_map::value_type& zone_pair, zone_pips) {
+          BOOST_FOREACH(const zone_pip_map::value_type& zone_pair, _zone_pips) {
               if (spi.first == zone_pair.first || spi.second == zone_pair.first)
               {
                   id = zone_pair.first;
@@ -513,13 +443,13 @@ int mesherCGAL::run(CGALSettings& settings) {
 
       if (id < 0)
       {
-          boundary_indices[(*fit)] = 0;
+          _boundary_indices[(*fit)] = 0;
           continue;
       }
 
       m++;
 
-      boundary_indices[(*fit)] = id;
+      _boundary_indices[(*fit)] = id;
 
       if (!region_boundary_count.count(id))
           region_boundary_count[id] = 0;
@@ -530,11 +460,44 @@ int mesherCGAL::run(CGALSettings& settings) {
       std::cout << " of which " << region_pair.second << " in region " << region_pair.first << std::endl;
   }
 
+  return 0;
+}
 
+int mesherCGAL::MesherCGAL::output() {
   std::cout << "Write to GMSH" << std::endl;
-  CGAL::write_c3t3_to_gmsh_file<C3t3,Polyhedron>(c3t3, boundary_indices, output_prefix + ".msh", (default_zone_id == 0), number_from_zero);
+  CGAL::write_c3t3_to_gmsh_file<C3t3,Polyhedron>(_c3t3, _boundary_indices, std::string(_settings.output_prefix()) + ".msh", (_settings.tissue_id() == 0), _settings.number_from_zero());
 
   std::cout << "Complete" << std::endl;
 
   return 0;
+}
+
+int mesherCGAL::MesherCGAL::run() {
+    int err;
+
+    if ((err = setup_regions())) {
+        std::cerr << "Could not set up regions" << std::endl;
+        return 1000 + err;
+    }
+    if ((err = calculate_bbox())) {
+        std::cerr << "Could not calculate BBox" << std::endl;
+        return 2000 + err;
+    }
+
+    if ((err = mesh())) {
+        std::cerr << "Could not mesh" << std::endl;
+        return 4000 + err;
+    }
+
+    if ((err = label_boundaries())) {
+        std::cerr << "Could not label boundaries" << std::endl;
+        return 5000 + err;
+    }
+
+    if ((err = output())) {
+        std::cerr << "Could not output" << std::endl;
+        return 6000 + err;
+    }
+
+    return 0;
 }

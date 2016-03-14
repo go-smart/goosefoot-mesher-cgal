@@ -32,14 +32,16 @@ public:
             region_ip_map& region_ips,
             const Point_3* centre,
             float radius,
-            int* organ_id,
-            int* extent_id,
+            bool use_organ,
+            int organ_id,
+            bool use_extent,
+            int extent_id,
             std::vector<int>& vessels,
             std::vector<int>& needles,
             zone_pip_map& zone_pips,
             zone_activity_sphere_map& zone_activity_spheres,
             int default_zone=1
-    ) : zone_pips_(zone_pips), default_zone_(default_zone), organ_id_(organ_id), extent_id_(extent_id),
+    ) : zone_pips_(zone_pips), default_zone_(default_zone), use_organ_(use_organ), organ_id_(organ_id), use_extent_(use_extent), extent_id_(extent_id),
         zone_activity_spheres_(zone_activity_spheres)
     {
       Polyhedron* organ = NULL;
@@ -49,8 +51,8 @@ public:
 
       extent_tree_ = new Tree();
 
-      if (organ_id != NULL) {
-        organ = new Polyhedron(*region_ips[*organ_id]);
+      if (use_organ) {
+        organ = new Polyhedron(*region_ips[organ_id]);
         extent_tree_->insert(organ->facets_begin(), organ->facets_end(), *organ);
         organ_pip_= new Point_inside_polyhedron(*organ);
       }
@@ -81,13 +83,13 @@ public:
         int zone = default_zone_;
 
         if (CGAL::squared_distance(*centre_, p) > radius_ * radius_)
-            return *extent_id_ == 0 ? 0 : -*extent_id_;
+            return extent_id_ == 0 ? 0 : -extent_id_;
 
         if (organ_pip_ != NULL) {
             if (!(*organ_pip_)(p))
-                return *organ_id_ == 0 ? -1000 : -*organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
+                return organ_id_ == 0 ? -1000 : -organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
             else
-                zone = *organ_id_;
+                zone = organ_id_;
         }
 
         BOOST_FOREACH(const pip_vector::value_type& pip, vessels_pip_) {
@@ -130,7 +132,11 @@ public:
 
 protected:
     zone_pip_map& zone_pips_;
-    int default_zone_, *organ_id_, *extent_id_;
+    int default_zone_;
+    bool use_organ_;
+    int organ_id_;
+    bool use_extent_;
+    int extent_id_;
 
     const Point_3* centre_;
     float radius_;

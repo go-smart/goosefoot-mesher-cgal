@@ -49,7 +49,6 @@
 
 #include <CGAL/bounding_box.h>
 
-
 // Domain
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Polyhedron_3<K> Polyhedron;
@@ -71,19 +70,26 @@ typedef FT (Function)(const Point&);
 
 typedef Exact_polyhedron::HalfedgeDS Exact_HalfedgeDS;
 
+// Triangulation
+typedef CGAL::Mesh_triangulation_3<Mesh_domain>::type Tr;
+typedef CGAL::Mesh_complex_3_in_triangulation_3<Tr> C3t3;
+
+
+
 namespace mesherCGAL {
+
     //int visualization_set_allocation_order(int ix, int order, double cl, double needle_dist, double x, double y, double z);
     //int visualization_create_structured_grid(double x0, double y0, double z0, int nx, int ny, int nz, double dx);
     //int visualization_save(std::string& filename);
 
     int simplify(Polyhedron& boundary);
-    int run(CGALSettings& settings);
 
     struct activity_sphere {
         K::Point_3* centre;
         float r;
         int i;
     };
+
 }
 
 #endif

@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "mesher_cgal.h"
+#include "mesher_cgal_app.h"
 
 #include <google/protobuf/text_format.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
@@ -41,16 +41,7 @@ int main(int argc, char* argv[])
   CGALSettings settings;
 
   std::ifstream from_file(argv[1]);
-  //std::cout << argv[2] << std::endl;
   if (argc > 2 && strcmp(argv[2], "-text") == 0) {
-	  //std::cout << argv[1] << std::endl;
-	  //while (!from_file.eof())
-	  //{
-		 // std::string fromeee;
-		 // getline(from_file, fromeee);
-		 // std::cout <<"hey"<< fromeee <<std::endl;
-		 // 
-	  //}
       google::protobuf::io::IstreamInputStream is(&from_file);
       if (!google::protobuf::TextFormat::Parse(&is, &settings)) {
           std::cerr << "Unable to parse protobuf from the settings file (text)" << std::endl;
@@ -80,7 +71,14 @@ int main(int argc, char* argv[])
   if (argc > 2 && strcmp(argv[2], "-dummy") == 0)
       return 0;
 
-  mesherCGAL::run(settings);
+  int err;
+
+  mesherCGAL::MesherCGAL mesher(settings);
+  if ((err = mesher.init()))
+      exit(err);
+
+  if ((err = mesher.run()))
+      exit(err);
+
+  return 0;
 }
-
-
