@@ -18,16 +18,16 @@ typedef std::map< int, Tree* > zone_tree_map;
 
 typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
 
-class ZonePrioritySorting
-{
-    private:
-        zone_cls_map& _zone_priorities;
-    public:
-        ZonePrioritySorting(zone_cls_map& zone_priorities) : _zone_priorities(zone_priorities) {}
-        bool operator() (const int& i, const int& j) const
-        { return fabs(_zone_priorities[i] -_zone_priorities[j]) < 1e-9 ? (i < j) : _zone_priorities[i] < _zone_priorities[j]; }
-};
+namespace mesherCGAL {
+    class ZonePrioritySorting
+    {
+        public:
+            ZonePrioritySorting() {}
+            bool operator() (const Zone& z, const Zone& w) const
+            { return fabs(z.get_priority() - w.get_priority()) < 1e-9 ? (z.get_id() < w.get_id()) : z.get_priority() < w.get_priority(); }
+    };
 
-typedef std::map< int, Point_inside_polyhedron*, ZonePrioritySorting > zone_pip_map;
+    typedef std::map< int, Point_inside_polyhedron*, ZonePrioritySorting > zone_pip_map;
+}
 
 #endif

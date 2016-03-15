@@ -17,7 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "copy_polyhedron.h"
 #include "mesher_cgal_app.h"
 
 // [B]
@@ -84,6 +83,8 @@
 
 #include "parse_region.h"
 #include "write_c3t3_to_gmsh_file.h"
+#include "zone_priority_sorting.h"
+#include "copy_polyhedron.h"
 
 // [B]
 using namespace mesherCGAL;
@@ -136,6 +137,41 @@ typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
 // Criteria
 typedef CGAL::Mesh_criteria_3<Tr> Exact_Mesh_criteria;
 
+bool mesherCGAL::Zone::set_activity_sphere(float x, float y, float z, float r, int i) {
+    activity_sphere = new struct activity_sphere;
+    activity_sphere->centre = new Point(x, y, z);
+    activity_sphere->r = r;
+    activity_sphere->i = i;
+    return true;
+}
+
+void mesherCGAL::Zone::print_activity_sphere() {
+    if (activity_sphere)
+      std::cout << "[" << activity_sphere->i <<
+          ":(" << activity_sphere->centre->x() <<
+          "," << activity_sphere->centre->y() <<
+          "," << activity_sphere->centre->z() <<
+          "):" << activity_sphere->r << "]";
+}
+
+bool mesherCGAL::Zone::load(std::string filename) {
+    std::shared_ptr<Exact_polyhedron> ep = std::make_shared<Exact_polyhedron>();
+    PolyhedronUtils::readSurfaceFile(filename, *ep);
+    create_polyhedra(ep);
+
+    return true;
+}
+
+bool mesherCGAL::Zone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
+    _ep = ep;
+
+    _ip = std::make_shared<Polyhedron>();
+    poly_copy<Polyhedron,Exact_polyhedron>(_ip, _ep);
+    _pip = std::make_shared<Point_inside_polyhedron>(*_ip);
+
+    return true;
+}
+
 int mesherCGAL::MesherCGAL::init() {
   std::string _settings_string;
   google::protobuf::TextFormat::PrintToString(_settings, &_settings_string);
@@ -167,8 +203,6 @@ int mesherCGAL::MesherCGAL::init() {
 
 int mesherCGAL::MesherCGAL::setup_regions() {
   region_string_map region_files;
-  zone_string_map zone_files;
-  zone_ep_map zone_eps;
 
   std::cout << "Finding regions : " << std::endl;
   if (_settings.has_organ_file()) {
@@ -198,41 +232,32 @@ int mesherCGAL::MesherCGAL::setup_regions() {
   }
   if (_settings.zones_size() || _settings.zone_size()) {
       std::cout << " - Zones : " << std::endl << "   \\ ";
-      for (int i = 0 ; i < _settings.zones_size() ; i++) {
-          int id = _settings.zones_index(i);
-          zone_files[id] = _settings.zones(i);
-          zones.push_back(id);
-          polyhedral_zones.push_back(id);
-          _zone_cls[id] = _settings.zone_field();
-          _zone_priorities[id] = 0.0;
-          std::cout << id << " ";
-      }
       for (int i = 0 ; i < _settings.zone_size() ; i++) {
           int id = _settings.zone(i).index();
-          zone_files[id] = _settings.zone(i).file();
-          zones.push_back(id);
-          polyhedral_zones.push_back(id);
+          float cl, priority;
           std::cout << id;
 
           if (_settings.zone(i).has_characteristic_length()) {
-              _zone_cls[id] = _settings.zone(i).characteristic_length();
-              std::cout << "(" << _zone_cls[id] << ")";
+              cl = _settings.zone(i).characteristic_length();
+              std::cout << "(" << cl << ")";
           }
           else {
-              _zone_cls[id] = _settings.zone_field();
+              cl = _settings.zone_field();
           }
 
           if (_settings.zone(i).has_priority()) {
-              _zone_priorities[id] = _settings.zone(i).priority();
-              if (fabs(_zone_priorities[id]) > 1e-10)
-                  std::cout << "<" << _zone_priorities[id] << ">";
+              priority = _settings.zone(i).priority();
+              if (fabs(priority) > 1e-10)
+                  std::cout << "<" << priority << ">";
           }
           else {
-              _zone_priorities[id] = 0.0;
+              priority = 0.0;
           }
 
+          Zone zone(id, cl, priority);
+          _zones.push_back(zone);
+
           if (_settings.zone(i).has_activity() && _settings.zone(i).has_inactivity_index()) {
-              _zone_activity_spheres[id] = new struct activity_sphere;
               double
                   x = _settings.zone(i).activity().x(),
                   y = _settings.zone(i).activity().y(),
@@ -243,20 +268,26 @@ int mesherCGAL::MesherCGAL::setup_regions() {
                   y += _centre->y();
                   z += _centre->z();
               }
-              _zone_activity_spheres[id]->centre = new Point(x, y, z);
-              _zone_activity_spheres[id]->r = _settings.zone(i).activity().r();
-              _zone_activity_spheres[id]->i = _settings.zone(i).inactivity_index();
-              zones.push_back(_zone_activity_spheres[id]->i);
-              std::cout << "[" << _zone_activity_spheres[id]->i <<
-                  ":(" << _zone_activity_spheres[id]->centre->x() <<
-                  "," << _zone_activity_spheres[id]->centre->y() <<
-                  "," << _zone_activity_spheres[id]->centre->z() <<
-                  "):" << _zone_activity_spheres[id]->r << "]";
+              int inactivity_index = _settings.zone(i).inactivity_index();
+              zone.set_activity_sphere(x, y, z, _settings.zone(i).activity().r(), i);
+              _zones.push_back(Zone(inactivity_index, cl, priority));
+              zone.print_activity_sphere();
           }
           std::cout << " ";
+
+          zone.load(_settings.zone(i).file());
+
+          std::shared_ptr<Exact_polyhedron> ep;
+          if ((ep = zone.exact_polyhedron())) {
+              if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
+                  _region_eps[id] = ep;
+
+              std::cout << id << " (" << ep->size_of_facets() << " facets) " << std::flush;
+          }
       }
       std::cout << std::endl;
   }
+  std::sort(_zones.begin(), _zones.end(), ZonePrioritySorting());
 
   Polyhedron inexact_structures_polyhedron, inexact_combined_polyhedron, inexact_boundary_polyhedron;
   Exact_polyhedron exact_structures_polyhedron;
@@ -264,52 +295,35 @@ int mesherCGAL::MesherCGAL::setup_regions() {
   Exact_polyhedron exact_combined_polyhedron;
   std::cout << "Loading (boundary) regions : " << std::endl << " - ";
   BOOST_FOREACH(const region_string_map::value_type& region_pair, region_files) {
-      Exact_polyhedron* ep = new Exact_polyhedron();
+      std::shared_ptr<Exact_polyhedron> ep = std::make_shared<Exact_polyhedron>();
       PolyhedronUtils::readSurfaceFile(region_pair.second, *ep);
       _region_eps[region_pair.first] = ep;
       std::cout << region_pair.first << " (" << ep->size_of_facets() << " facets) " << std::flush;
   }
   std::cout << std::endl;
-  std::cout << "Loading zones : " << std::endl << " - ";
-  BOOST_FOREACH(const zone_string_map::value_type& zone_pair, zone_files) {
-      Exact_polyhedron* ep = new Exact_polyhedron();
-      PolyhedronUtils::readSurfaceFile(zone_pair.second, *ep);
-      zone_eps[zone_pair.first] = ep;
-      if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
-          _region_eps[zone_pair.first] = ep;
-      std::cout << zone_pair.first << " (" << ep->size_of_facets() << " facets) " << std::flush;
-  }
   std::cout << std::endl;
   if (_settings.has_organ_file()) {
-      Polyhedron* inexact_organ_polyhedron = new Polyhedron();
+      std::shared_ptr<Polyhedron> inexact_organ_polyhedron = std::make_shared<Polyhedron>();
       _region_ips[_settings.organ_index()] = inexact_organ_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*inexact_organ_polyhedron, *_region_eps[_settings.organ_index()]);
+      poly_copy<Polyhedron,Exact_polyhedron>(inexact_organ_polyhedron, _region_eps[_settings.organ_index()]);
   }
 
   BOOST_FOREACH(std::vector<int>::value_type& id, vessels) {
-      Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
+      std::shared_ptr<Polyhedron> inexact_boundary_polyhedron = std::make_shared<Polyhedron>();
       _region_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*_region_ips[id], *_region_eps[id]);
+      poly_copy<Polyhedron,Exact_polyhedron>(_region_ips[id], _region_eps[id]);
   }
   BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
-      Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
+      std::shared_ptr<Polyhedron> inexact_boundary_polyhedron = std::make_shared<Polyhedron>();
       _region_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*_region_ips[id], *_region_eps[id]);
-  }
-  BOOST_FOREACH(const zone_ep_map::value_type& zone_pair, zone_eps) {
-      int id = zone_pair.first;
-      Polyhedron* inexact_boundary_polyhedron = new Polyhedron();
-      _zone_ips[id] = inexact_boundary_polyhedron;
-      poly_copy<Polyhedron,Exact_polyhedron>(*_zone_ips[id], *zone_eps[id]);
-      _zone_pips[id] = new Point_inside_polyhedron(*_zone_ips[id]);
+      poly_copy<Polyhedron,Exact_polyhedron>(_region_ips[id], _region_eps[id]);
   }
 
-  if (_zone_pips.size())
+  if (_zones.size())
       std::cout << "Order of zones by priority:";
-  BOOST_FOREACH(zone_pip_map::value_type& v, _zone_pips) {
-      std::cout << " " << v.first;
-  }
-  if (_zone_pips.size())
+  for (auto&& v : _zones)
+      std::cout << " " << v.get_id();
+  if (_zones.size())
       std::cout << std::endl;
 
   if (_settings.boundary_tree()) {
@@ -362,31 +376,28 @@ int mesherCGAL::MesherCGAL::calculate_bbox() {
 }
 
 int mesherCGAL::MesherCGAL::setup_domain_field() {
-  Implicit_zone_function<K> izf(_region_ips, _centre, _settings.bounding_radius(), _settings.has_organ_file(), _settings.organ_index(), _settings.has_extent_index(), _settings.extent_index(), vessels, needles, _zone_pips,
-          _zone_activity_spheres, _settings.tissue_id());
+  Implicit_zone_function<K> izf(_region_ips, _centre, _settings.bounding_radius(), _settings.has_organ_file(), _settings.organ_index(), _settings.has_extent_index(), _settings.extent_index(), vessels, needles, _zones,
+          _settings.tissue_id());
   _domain = new Mesh_domain_implicit(izf, K::Sphere_3(*_centre, (FT)1.2*_bbox_radius*_bbox_radius), (FT)(_bbox_radius * 2.e-5));
   Tree *needle_tree = NULL;
   if (_settings.needles_size() > 0) {
       needle_tree = new Tree();
       BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
-          Polyhedron* inexact_needle_polyhedron = new Polyhedron();
+          std::shared_ptr<Polyhedron> inexact_needle_polyhedron = std::make_shared<Polyhedron>();
           _region_ips[id] = inexact_needle_polyhedron;
-          poly_copy<Polyhedron,Exact_polyhedron>(*inexact_needle_polyhedron, *_region_eps[id]);
+          poly_copy<Polyhedron,Exact_polyhedron>(inexact_needle_polyhedron, _region_eps[id]);
 
           needle_tree->insert(inexact_needle_polyhedron->facets_begin(), inexact_needle_polyhedron->facets_end(), *inexact_needle_polyhedron);
       }
   }
   zone_tree_map zone_trees;
-  if (!_zone_ips.empty() && !_settings.omit_zone_tree()) {
-      BOOST_FOREACH(const zone_ip_map::value_type& zone_pair, _zone_ips) {
-          int id = zone_pair.first;
-          zone_trees[id] = new Tree();
-          zone_trees[id]->insert(_zone_ips[id]->facets_begin(), _zone_ips[id]->facets_end(), *_zone_ips[id]);
-      }
-  }
-  _pdf = new Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index>(_boundary_tree, _settings.near_field(), _settings.far_field(), _zone_cls, _settings.zone_radius(), _settings.centre_radius(),
-          (_settings.dense_centre() ? _centre : NULL), (_settings.omit_needle_tree() ? NULL : needle_tree), zone_trees, _settings.granularity(), *_bbox_p,
-          (_settings.has_solid_zone() && _settings.solid_zone() ? &_zone_pips : NULL));
+  if (!_settings.omit_zone_tree())
+      for (auto&& z : _zones)
+          z.add_tree();
+
+  _pdf = new Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index>(_boundary_tree, _settings.near_field(), _settings.far_field(), _zones, _settings.zone_radius(), _settings.centre_radius(),
+          (_settings.dense_centre() ? _centre : NULL), (_settings.omit_needle_tree() ? NULL : needle_tree), _settings.granularity(), *_bbox_p,
+          _settings.has_solid_zone() && _settings.solid_zone());
 
   return 0;
 }
@@ -432,13 +443,12 @@ int mesherCGAL::MesherCGAL::label_boundaries() {
       else if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
       {
           /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
-          BOOST_FOREACH(const zone_pip_map::value_type& zone_pair, _zone_pips) {
-              if (spi.first == zone_pair.first || spi.second == zone_pair.first)
+          for (auto&& z : _zones)
+              if (spi.first == z.get_id() || spi.second == z.get_id())
               {
-                  id = zone_pair.first;
+                  id = z.get_id();
                   break;
               }
-          }
       }
 
       if (id < 0)

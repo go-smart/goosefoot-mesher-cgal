@@ -49,6 +49,13 @@
 
 #include <CGAL/bounding_box.h>
 
+// tree
+#include <CGAL/AABB_tree.h>
+#include <CGAL/AABB_traits.h>
+#include <CGAL/AABB_face_graph_triangle_primitive.h>
+
+#include <CGAL/Point_inside_polyhedron_3.h>
+
 // Domain
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Polyhedron_3<K> Polyhedron;
@@ -74,13 +81,19 @@ typedef Exact_polyhedron::HalfedgeDS Exact_HalfedgeDS;
 typedef CGAL::Mesh_triangulation_3<Mesh_domain>::type Tr;
 typedef CGAL::Mesh_complex_3_in_triangulation_3<Tr> C3t3;
 
+typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron> Primitive;
+typedef CGAL::AABB_traits<K, Primitive> Traits;
+typedef CGAL::AABB_tree<Traits> Tree;
 
+typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
 
 namespace mesherCGAL {
 
     //int visualization_set_allocation_order(int ix, int order, double cl, double needle_dist, double x, double y, double z);
     //int visualization_create_structured_grid(double x0, double y0, double z0, int nx, int ny, int nz, double dx);
     //int visualization_save(std::string& filename);
+    typedef std::map< int, std::shared_ptr<Polyhedron> > region_ip_map;
+    typedef std::map< int, std::shared_ptr<Exact_polyhedron> > region_ep_map;
 
     int simplify(Polyhedron& boundary);
 
@@ -88,6 +101,70 @@ namespace mesherCGAL {
         K::Point_3* centre;
         float r;
         int i;
+    };
+
+    class Zone {
+        int _id;
+        float _cl;
+        float _priority;
+        Tree* _tree;
+        std::shared_ptr<Point_inside_polyhedron> _pip;
+        std::shared_ptr<Polyhedron> _ip;
+        std::shared_ptr<Exact_polyhedron> _ep;
+        bool has_activity_sphere;
+
+        /* If this ever ends up in a scenario where zone is destroyed, switch to unique_ptr and
+         * check performance impact */
+        struct activity_sphere* activity_sphere;
+
+        public:
+            Zone(int id, float cl, float priority) :
+                _id(id), _cl(cl), _priority(priority),
+                _tree(NULL), _ip(NULL), _ep(NULL), activity_sphere(NULL) {}
+            bool set_activity_sphere(float x, float y, float z, float r, int i);
+            void print_activity_sphere();
+            int get_id() const { return _id; }
+            float get_priority() const { return _priority; }
+            float get_cl() const { return _cl; }
+            bool is_container() const { return (bool)_pip; }
+            std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return _ep; }
+
+            int contains(const K::Point_3& p, bool check_activity_sphere=true) const {
+                if (!is_container())
+                    return 0;
+
+                int id = (*_pip)(p) ? _id : 0;
+
+                if (id && check_activity_sphere && has_activity_sphere) {
+                    Point* centre = activity_sphere->centre;
+                    float radius = activity_sphere->r;
+                    if (CGAL::squared_distance(*centre, p) > radius * radius)
+                    {
+                        return -activity_sphere->i;
+                    }
+                }
+
+                return id;
+            }
+            bool has_tree() const { return _tree; }
+            float squared_distance(const K::Point_3& p) const {
+                if (!has_tree())
+                    return -1.0;
+                return _tree->squared_distance(p);
+            }
+            bool add_tree() {
+                if (!_ip || has_tree())
+                    return false;
+
+                _tree = new Tree();
+                _tree->insert(_ip->facets_begin(), _ip->facets_end(), *_ip);
+
+                return true;
+            }
+            bool load(std::string filename);
+
+        private:
+            bool create_polyhedra(std::shared_ptr<Exact_polyhedron> ep);
     };
 
 }

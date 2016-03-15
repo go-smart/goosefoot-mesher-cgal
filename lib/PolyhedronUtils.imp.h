@@ -40,6 +40,8 @@
 #include <vtkPolyData.h>
 #include <vtkSTLWriter.h>
 
+#define MAX(a,b) (a < b ? b : a)
+
 static inline double strToDouble(const std::string& s, bool print=false)
 {
   std::istringstream is(s);
@@ -301,19 +303,17 @@ void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
     reader->SetFileName(filename.c_str());
     reader->Update();
 
-    char tmpnamebuffer[128] = "/tmp/.gssfmesher-XXXXXX.stl";
-    FILE* f;
-    int fd;
+    char tmpnamebuffer[MAX(L_tmpnam, 128)] = "/tmp/.gssfmesher-XXXXXX.stl";
 
     vtkSmartPointer<vtkSTLWriter> writer =
         vtkSmartPointer<vtkSTLWriter>::New();
 
-    writer->WriteToOutputStringOn();
 #if VTK_MAJOR_VERSION >= 6
+    FILE* f;
+    int fd;
+
+    writer->WriteToOutputStringOn();
     writer->SetInputData(reader->GetOutput());
-#else
-    writer->SetInput(reader->GetOutput());
-#endif
     writer->Write();
 
     if ((fd = mkstemp(tmpnamebuffer)) == -1 || !(f = fdopen(fd, "w"))) {
@@ -323,6 +323,16 @@ void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
 
     fwrite(writer->GetOutputString(), sizeof(char), writer->GetOutputStringLength(), f);
     fclose(f);
+#else
+    writer->SetInput(reader->GetOutput());
+    if (!tmpnam(tmpnamebuffer)) {
+        std::cerr << ("Could not create temporary file!") << std::endl;
+        exit(-9);
+    }
+
+    writer->SetFileName(tmpnamebuffer);
+    writer->Write();
+#endif
 
     PolyhedronUtils::readSTLFile(tmpnamebuffer, p);
     remove(tmpnamebuffer);

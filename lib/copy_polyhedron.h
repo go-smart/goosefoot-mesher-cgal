@@ -1,8 +1,6 @@
 #ifndef COPY_POLYHEDRON_H
 #define COPY_POLYHEDRON_H
 
-#include "proximity_domain_3.h"
-
 #include <CGAL/Polyhedron_incremental_builder_3.h>
 
 // See : http://cgal-discuss.949826.n4.nabble.com/Example-Convert-polyhedron-from-one-kernel-to-another-td4514497.html
@@ -12,7 +10,7 @@ class Polyhedron_output>
 struct Copy_polyhedron_to
         : public CGAL::Modifier_base<typename Polyhedron_output::HalfedgeDS>
 {
-        Copy_polyhedron_to(const Polyhedron_input& in_poly)
+        Copy_polyhedron_to(std::shared_ptr<Polyhedron_input> in_poly)
                 : in_poly(in_poly) {}
 
         void operator()(typename Polyhedron_output::HalfedgeDS& out_hds)
@@ -25,12 +23,12 @@ struct Copy_polyhedron_to
                 typedef typename Polyhedron_input::Facet_const_iterator  Facet_const_iterator;
                 typedef typename Polyhedron_input::Halfedge_around_facet_const_circulator HFCC;
 
-                builder.begin_surface(in_poly.size_of_vertices(),
-                        in_poly.size_of_facets(),
-                        in_poly.size_of_halfedges());
+                builder.begin_surface(in_poly->size_of_vertices(),
+                        in_poly->size_of_facets(),
+                        in_poly->size_of_halfedges());
 
                 for(Vertex_const_iterator
-                        vi = in_poly.vertices_begin(), end = in_poly.vertices_end();
+                        vi = in_poly->vertices_begin(), end = in_poly->vertices_end();
                         vi != end ; ++vi)
                 {
                         typename Polyhedron_output::Point_3 p(::CGAL::to_double( vi->point().x()),
@@ -40,10 +38,10 @@ struct Copy_polyhedron_to
                 }
 
                 typedef CGAL::Inverse_index<Vertex_const_iterator> Index;
-                Index index( in_poly.vertices_begin(), in_poly.vertices_end());
+                Index index( in_poly->vertices_begin(), in_poly->vertices_end());
 
                 for(Facet_const_iterator
-                        fi = in_poly.facets_begin(), end = in_poly.facets_end();
+                        fi = in_poly->facets_begin(), end = in_poly->facets_end();
                         fi != end; ++fi)
                 {
                         HFCC hc = fi->facet_begin();
@@ -58,15 +56,15 @@ struct Copy_polyhedron_to
                 builder.end_surface();
         } // end operator()(..)
 private:
-        const Polyhedron_input& in_poly;
+        std::shared_ptr<Polyhedron_input> in_poly;
 }; // end Copy_polyhedron_to<>
 
 template <class Poly_B, class Poly_A>
-void poly_copy(Poly_B& poly_b, const Poly_A& poly_a)
+void poly_copy(std::shared_ptr<Poly_B> poly_b, std::shared_ptr<Poly_A> poly_a)
 {
-        poly_b.clear();
+        poly_b->clear();
         Copy_polyhedron_to<Poly_A, Poly_B> modifier(poly_a);
-        poly_b.delegate(modifier);
+        poly_b->delegate(modifier);
 }
 
 #endif

@@ -22,17 +22,12 @@
 
 #include "mesher_cgal.h"
 
-#include "zone_priority_sorting.h"
 #include "Signed_mesh_domain_3.h"
 #include "implicit_zone_function.h"
 #include "proximity_domain_3.h"
 
 namespace mesherCGAL {
     // MesherCGAL members
-    typedef std::map< int, Polyhedron* > region_ip_map;
-    typedef std::map< int, Exact_polyhedron* > region_ep_map;
-    typedef std::map< int, Polyhedron* > zone_ip_map;
-    typedef std::map< int, struct activity_sphere* > zone_activity_sphere_map;
     typedef CGAL::Signed_mesh_domain_3< Implicit_zone_function<K>, K > Mesh_domain_implicit;
     typedef K::Iso_cuboid_3 Iso_cuboid;
 
@@ -44,13 +39,10 @@ namespace mesherCGAL {
         C3t3 _c3t3;
         std::vector< int > vessels;
         std::vector< int > needles;
-        std::vector< int > zones, polyhedral_zones;
-        zone_cls_map _zone_priorities;
-        zone_cls_map _zone_cls;
-        zone_pip_map _zone_pips;
+        std::vector< int > polyhedral_zones;
+        std::vector< Zone > _zones;
+
         region_ep_map _region_eps;
-        zone_ip_map _zone_ips;
-        zone_activity_sphere_map _zone_activity_spheres;
         FT _bbox_radius;
         Tree *_boundary_tree;
         Iso_cuboid* _bbox_p;
@@ -60,7 +52,6 @@ namespace mesherCGAL {
         public:
             MesherCGAL(const CGALSettings& settings) :
                 _settings(settings), _centre(NULL),
-                _zone_pips(ZonePrioritySorting(_zone_priorities)),
                 _boundary_tree(NULL), _bbox_p(NULL), _pdf(NULL),
                 _domain(NULL)
             {}
