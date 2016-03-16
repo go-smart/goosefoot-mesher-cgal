@@ -67,5 +67,8 @@ include_directories(include)
 
 set(PROTOBUF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/pb)
 
+find_package(VTK REQUIRED)
+include(${VTK_USE_FILE})
+
 add_subdirectory(lib)
 add_subdirectory(src)

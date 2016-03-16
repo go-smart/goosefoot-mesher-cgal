@@ -8,9 +8,6 @@ endif()
 find_package(CGAL COMPONENTS ImageIO)
 include( ${CGAL_USE_FILE} )
 
-find_package(VTK REQUIRED)
-include(${VTK_USE_FILE})
-
 include_directories (BEFORE include)
 if (MSVC)
     find_package(Boost)

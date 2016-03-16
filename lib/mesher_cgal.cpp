@@ -77,6 +77,8 @@
 
 #include <CGAL/Simple_cartesian.h>
 
+#include <vtkUnstructuredGridReader.h>
+
 #include <map>
 #include <vector>
 #include <utility>
@@ -154,7 +156,7 @@ void mesherCGAL::Zone::print_activity_sphere() {
           "):" << activity_sphere->r << "]";
 }
 
-bool mesherCGAL::Zone::load(std::string filename) {
+bool mesherCGAL::PolyhedralZone::load(std::string filename) {
     std::shared_ptr<Exact_polyhedron> ep = std::make_shared<Exact_polyhedron>();
     PolyhedronUtils::readSurfaceFile(filename, *ep);
     create_polyhedra(ep);
@@ -162,7 +164,7 @@ bool mesherCGAL::Zone::load(std::string filename) {
     return true;
 }
 
-bool mesherCGAL::Zone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
+bool mesherCGAL::PolyhedralZone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
     _ep = ep;
 
     _ip = std::make_shared<Polyhedron>();
@@ -170,6 +172,19 @@ bool mesherCGAL::Zone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
     _pip = std::make_shared<Side_of_triangle_mesh>(*_ip);
 
     return true;
+}
+
+bool mesherCGAL::UnstructuredGridZone::load(std::string filename) {
+    vtkSmartPointer<vtkUnstructuredGridReader> reader = vtkSmartPointer<vtkUnstructuredGridReader>::New();
+
+    reader->SetFileName(filename.c_str());
+    reader->Update();
+    _grid = reader->GetOutput();
+
+    return true;
+}
+
+int mesherCGAL::UnstructuredGridZone::contains_all(const K::Point_3&) const {
 }
 
 int mesherCGAL::MesherCGAL::init() {
@@ -254,8 +269,9 @@ int mesherCGAL::MesherCGAL::setup_regions() {
               priority = 0.0;
           }
 
-          _zones.push_back(Zone(id, cl, priority));
-          Zone& zone = _zones.back();
+          /* In lieu of make_unique in C++14 */
+          _zones.push_back(std::unique_ptr<PolyhedralZone>(new PolyhedralZone(id, cl, priority)));
+          Zone& zone = *_zones.back();
 
           if (_settings.zone(i).has_activity() && _settings.zone(i).has_inactivity_index()) {
               double
@@ -268,9 +284,9 @@ int mesherCGAL::MesherCGAL::setup_regions() {
                   y += _centre->y();
                   z += _centre->z();
               }
-              int inactivity_index = _settings.zone(i).inactivity_index();
+              //int inactivity_index = _settings.zone(i).inactivity_index();
               zone.set_activity_sphere(x, y, z, _settings.zone(i).activity().r(), i);
-              _zones.push_back(Zone(inactivity_index, cl, priority));
+              //_zones.push_back(PolyhedralZone(inactivity_index, cl, priority));
               zone.print_activity_sphere();
           }
           std::cout << " ";
@@ -322,7 +338,7 @@ int mesherCGAL::MesherCGAL::setup_regions() {
   if (_zones.size())
       std::cout << "Order of zones by priority:";
   for (auto&& v : _zones)
-      std::cout << " " << v.get_id();
+      std::cout << " " << v->get_id();
   if (_zones.size())
       std::cout << std::endl;
 
@@ -390,10 +406,9 @@ int mesherCGAL::MesherCGAL::setup_domain_field() {
           needle_tree->insert(inexact_needle_polyhedron->facets_begin(), inexact_needle_polyhedron->facets_end(), *inexact_needle_polyhedron);
       }
   }
-  zone_tree_map zone_trees;
   if (!_settings.omit_zone_tree())
       for (auto&& z : _zones)
-          z.add_tree();
+          z->add_tree();
 
   _pdf = new Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index>(_boundary_tree, _settings.near_field(), _settings.far_field(), _zones, _settings.zone_radius(), _settings.centre_radius(),
           (_settings.dense_centre() ? _centre : NULL), (_settings.omit_needle_tree() ? NULL : needle_tree), _settings.granularity(), *_bbox_p,
@@ -459,9 +474,9 @@ int mesherCGAL::MesherCGAL::label_boundaries() {
       {
           /* Ensures ordering by sorted priority (this assumes zones and regions are aligned) */
           for (auto&& z : _zones)
-              if (spi.first == z.get_id() || spi.second == z.get_id())
+              if (spi.first == z->get_id() || spi.second == z->get_id())
               {
-                  id = z.get_id();
+                  id = z->get_id();
                   break;
               }
       }

@@ -40,7 +40,7 @@ namespace mesherCGAL {
         std::vector< int > vessels;
         std::vector< int > needles;
         std::vector< int > polyhedral_zones;
-        std::vector< Zone > _zones;
+        std::vector< std::unique_ptr<Zone> > _zones;
 
         region_ep_map _region_eps;
         FT _bbox_radius;

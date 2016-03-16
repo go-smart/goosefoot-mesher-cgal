@@ -31,7 +31,7 @@ namespace mesherCGAL {
       
     public:
       /// Constructor
-      Proximity_domain_field_3(Tree* tree, double near_cl, double far_cl, std::vector<Zone> zones, float zone_radius, float centre_radius,
+      Proximity_domain_field_3(Tree* tree, double near_cl, double far_cl, std::vector< std::unique_ptr<Zone> >& zones, float zone_radius, float centre_radius,
                     const Point* centre, Tree* needle_tree, float granularity, const Iso_cuboid& bbox, bool solid_zones) :
                             max_(CGAL::Max<FT>()), min_(CGAL::Min<FT>()),
                             tree_(tree), near_cl_(near_cl), far_cl_(far_cl), zones_(zones), zone_radius_(zone_radius),
@@ -135,20 +135,20 @@ namespace mesherCGAL {
 
           for (auto&& zone : zones_) {
               FT zone_dist = -1;
-              if (solid_zones_ && zone.is_container() && zone.contains(p)) {
+              if (solid_zones_ && zone->is_container() && zone->contains(p)) {
                   zone_dist = 0;
               }
               else {
-                  zone_dist = zone.squared_distance(p);
+                  zone_dist = zone->squared_distance(p);
                   if (zone_dist > zone_radius_ * zone_radius_) 
                       zone_dist = zone_dist + zone_radius_ * zone_radius_ - 2. * sqrt(zone_dist) * zone_radius_;
                   else zone_dist = 0.;
                   if (zone_dist < 0) zone_dist = 0.;
               }
               //zone_dist = CGAL::min(zone_dist - near_cl_ * 2, 0.0); /* Introduce near_cl region around zone */
-              if (dist < 0 || (to_cl(closest_cl, dist) > to_cl(zone.get_cl(), zone_dist))) {
+              if (dist < 0 || (to_cl(closest_cl, dist) > to_cl(zone->get_cl(), zone_dist))) {
                   dist = zone_dist;
-                  closest_cl = zone.get_cl();
+                  closest_cl = zone->get_cl();
               }
           }
 
@@ -207,7 +207,7 @@ namespace mesherCGAL {
       Tree* tree_;
       mutable FT* values_;
       FT near_cl_, far_cl_;
-      std::vector<Zone> zones_;
+      std::vector< std::unique_ptr<Zone> >& zones_;
       FT zone_radius_, centre_radius_;
       const Point* centre_;
       Tree* needle_tree_;

@@ -15,7 +15,7 @@ typedef CGAL::AABB_traits<K, Primitive> Traits;
 typedef CGAL::AABB_tree<Traits> Tree;
 
 namespace mesherCGAL {
-    typedef std::vector< Zone > zones_vec;
+    typedef std::vector< std::unique_ptr<Zone> > zones_vec;
 
     template<typename K >
     class Implicit_zone_function
@@ -98,8 +98,8 @@ namespace mesherCGAL {
             }
 
             for (auto&& z : zones_) {
-                if (z.contains(p) != 0) {
-                    zone = z.get_id();
+                if (z->contains(p) != 0) {
+                    zone = z->get_id();
 
                     if (zone > 0 && default_zone_ == 0)
                         zone += 1;

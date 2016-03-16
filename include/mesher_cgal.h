@@ -56,6 +56,9 @@
 
 #include <CGAL/Side_of_triangle_mesh.h>
 
+#include <vtkSmartPointer.h>
+#include <vtkUnstructuredGrid.h>
+
 // Domain
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef CGAL::Polyhedron_3<K> Polyhedron;
@@ -104,37 +107,52 @@ namespace mesherCGAL {
     };
 
     class Zone {
-        int _id;
-        float _cl;
-        float _priority;
-        Tree* _tree;
-        std::shared_ptr<Side_of_triangle_mesh> _pip;
-        std::shared_ptr<Polyhedron> _ip;
-        std::shared_ptr<Exact_polyhedron> _ep;
+        private:
+            /* If this ever ends up in a scenario where zone is destroyed, switch to unique_ptr and
+             * check performance impact */
+            struct activity_sphere* activity_sphere;
 
-        /* If this ever ends up in a scenario where zone is destroyed, switch to unique_ptr and
-         * check performance impact */
-        struct activity_sphere* activity_sphere;
+        protected:
+            int _id;
+            float _cl;
+            float _priority;
 
         public:
             Zone(int id, float cl, float priority) :
-                _id(id), _cl(cl), _priority(priority),
-                _tree(NULL), _ip(NULL), _ep(NULL), activity_sphere(NULL) {}
+                activity_sphere(NULL), _id(id), _cl(cl), _priority(priority) {}
+            virtual ~Zone() {}
             bool set_activity_sphere(float x, float y, float z, float r, int i);
             void print_activity_sphere();
             int get_id() const { return _id; }
             float get_priority() const { return _priority; }
             float get_cl() const { return _cl; }
-            bool is_container() const { return (bool)_pip; }
-            std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return _ep; }
+            virtual bool is_container() const = 0;
+            virtual std::shared_ptr<Exact_polyhedron> exact_polyhedron() = 0;
 
             int contains(const K::Point_3& p, bool check_activity_sphere=true) const {
                 if (!is_container())
                     return 0;
 
-                int id = (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE ? 0 : _id;
+                int id = contains_all(p);
 
-                if (id && check_activity_sphere && activity_sphere) {
+                if (id && check_activity_sphere) {
+                    int inactivity_index;
+                    if ((inactivity_index = outside_activity_sphere(p)) != 0)
+                        return inactivity_index;
+                }
+
+                return id;
+            }
+            virtual bool has_tree() const = 0;
+            virtual float squared_distance(const K::Point_3& p) const = 0;
+            virtual bool add_tree() = 0;
+            virtual bool load(std::string filename) = 0;
+
+        protected:
+            /* Ignores inactivity */
+            virtual int contains_all(const K::Point_3& p) const = 0;
+            int outside_activity_sphere(const K::Point_3& p) const {
+                if (activity_sphere) {
                     Point* centre = activity_sphere->centre;
                     float radius = activity_sphere->r;
                     if (CGAL::squared_distance(*centre, p) > radius * radius)
@@ -143,8 +161,22 @@ namespace mesherCGAL {
                     }
                 }
 
-                return id;
+                return 0;
             }
+    };
+
+    class PolyhedralZone : public Zone {
+        Tree* _tree;
+        std::shared_ptr<Side_of_triangle_mesh> _pip;
+        std::shared_ptr<Polyhedron> _ip;
+        std::shared_ptr<Exact_polyhedron> _ep;
+
+        public:
+            PolyhedralZone(int id, float cl, float priority) : Zone(id, cl, priority),
+                _tree(NULL), _ip(NULL), _ep(NULL) {}
+            bool is_container() const { return (bool)_pip; }
+            std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return _ep; }
+
             bool has_tree() const { return _tree; }
             float squared_distance(const K::Point_3& p) const {
                 if (!has_tree())
@@ -162,10 +194,30 @@ namespace mesherCGAL {
             }
             bool load(std::string filename);
 
+        protected:
+            int contains_all(const K::Point_3& p) const {
+                return (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE ? 0 : _id;
+            }
+
         private:
             bool create_polyhedra(std::shared_ptr<Exact_polyhedron> ep);
     };
 
+    class UnstructuredGridZone : public Zone {
+        vtkSmartPointer<vtkUnstructuredGrid> _grid;
+
+        public:
+            bool is_container() const { return true; };
+            std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return NULL; };
+
+            bool has_tree() const { return false; };
+            float squared_distance(const K::Point_3&) const { return 0; };
+            bool add_tree() { return false; };
+            bool load(std::string filename);
+
+        protected:
+            int contains_all(const K::Point_3& p) const;
+    };
 }
 
 #endif
