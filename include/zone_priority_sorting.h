@@ -3,7 +3,7 @@
 
 #include "mesher_cgal.h"
 
-#include <CGAL/Point_inside_polyhedron_3.h>
+#include <CGAL/Side_of_triangle_mesh.h>
 
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
@@ -16,7 +16,7 @@ typedef CGAL::AABB_tree<Traits> Tree;
 typedef std::map< int, float > zone_cls_map, zone_priorities_map;
 typedef std::map< int, Tree* > zone_tree_map;
 
-typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
+typedef CGAL::Side_of_triangle_mesh<Polyhedron,K> Side_of_triangle_mesh;
 
 namespace mesherCGAL {
     class ZonePrioritySorting
@@ -27,7 +27,7 @@ namespace mesherCGAL {
             { return fabs(z.get_priority() - w.get_priority()) < 1e-9 ? (z.get_id() < w.get_id()) : z.get_priority() < w.get_priority(); }
     };
 
-    typedef std::map< int, Point_inside_polyhedron*, ZonePrioritySorting > zone_pip_map;
+    typedef std::map< int, Side_of_triangle_mesh*, ZonePrioritySorting > zone_pip_map;
 }
 
 #endif

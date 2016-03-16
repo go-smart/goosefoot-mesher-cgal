@@ -3,8 +3,8 @@
 
 #include "mesher_cgal.h"
 
-#include <CGAL/Point_inside_polyhedron_3.h>
-typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
+#include <CGAL/Side_of_triangle_mesh.h>
+typedef CGAL::Side_of_triangle_mesh<Polyhedron,K> Side_of_triangle_mesh;
 
 #include <CGAL/AABB_tree.h>
 #include <CGAL/AABB_traits.h>
@@ -24,7 +24,7 @@ namespace mesherCGAL {
         typedef int                    return_type;
         typedef typename K::Point_3    Point_3;
         typedef typename K::FT         FT;
-        typedef typename std::vector< std::pair<int, Point_inside_polyhedron*> > pip_vector;
+        typedef typename std::vector< std::pair<int, Side_of_triangle_mesh*> > pip_vector;
 
         Implicit_zone_function(
                 region_ip_map& region_ips,
@@ -50,7 +50,7 @@ namespace mesherCGAL {
           if (use_organ) {
             organ = new Polyhedron(*region_ips[organ_id]);
             extent_tree_->insert(organ->facets_begin(), organ->facets_end(), *organ);
-            organ_pip_= new Point_inside_polyhedron(*organ);
+            organ_pip_= new Side_of_triangle_mesh(*organ);
           }
 
           extent_tree_->accelerate_distance_queries();
@@ -59,14 +59,14 @@ namespace mesherCGAL {
               Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end(), *region_ips[id]);
               tree->accelerate_distance_queries();
               trees_.push_back(tree);
-              vessels_pip_.push_back(std::pair<int, Point_inside_polyhedron*>(id, new Point_inside_polyhedron(*region_ips[id])));
+              vessels_pip_.push_back(std::pair<int, Side_of_triangle_mesh*>(id, new Side_of_triangle_mesh(*region_ips[id])));
           }
 
           BOOST_FOREACH(std::vector<int>::value_type& id, needles) {
               Tree* tree = new Tree(region_ips[id]->facets_begin(), region_ips[id]->facets_end(), *region_ips[id]);
               tree->accelerate_distance_queries();
               trees_.push_back(tree);
-              needles_pip_.push_back(std::pair<int, Point_inside_polyhedron*>(id, new Point_inside_polyhedron(*region_ips[id])));
+              needles_pip_.push_back(std::pair<int, Side_of_triangle_mesh*>(id, new Side_of_triangle_mesh(*region_ips[id])));
           }
         }
 
@@ -82,26 +82,28 @@ namespace mesherCGAL {
                 return extent_id_ == 0 ? 0 : -extent_id_;
 
             if (organ_pip_ != NULL) {
-                if (!(*organ_pip_)(p))
+                if ((*organ_pip_)(p) == CGAL::ON_UNBOUNDED_SIDE)
                     return organ_id_ == 0 ? -1000 : -organ_id_; //FIXME: replace with something sensible (for when default_zone==0)
                 else
                     zone = organ_id_;
             }
 
             BOOST_FOREACH(const pip_vector::value_type& pip, vessels_pip_) {
-                if ((*pip.second)(p))
+                if ((*pip.second)(p) == CGAL::ON_BOUNDED_SIDE)
                     return -pip.first;
             }
             BOOST_FOREACH(const pip_vector::value_type& pip, needles_pip_) {
-                if ((*pip.second)(p))
+                if ((*pip.second)(p) == CGAL::ON_BOUNDED_SIDE)
                     return -pip.first;
             }
 
             for (auto&& z : zones_) {
                 if (z.contains(p) != 0) {
                     zone = z.get_id();
+
                     if (zone > 0 && default_zone_ == 0)
                         zone += 1;
+
                     return zone;
                 }
             }
@@ -130,7 +132,7 @@ namespace mesherCGAL {
         float radius_;
         Tree *extent_tree_;
         std::vector<Tree*> trees_;
-        Point_inside_polyhedron *extent_pip_, *organ_pip_;
+        Side_of_triangle_mesh *extent_pip_, *organ_pip_;
         pip_vector vessels_pip_, needles_pip_;
     };
 }

@@ -54,7 +54,7 @@
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 
-#include <CGAL/Point_inside_polyhedron_3.h>
+#include <CGAL/Side_of_triangle_mesh.h>
 
 // Domain
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
@@ -85,7 +85,7 @@ typedef CGAL::AABB_face_graph_triangle_primitive<Polyhedron> Primitive;
 typedef CGAL::AABB_traits<K, Primitive> Traits;
 typedef CGAL::AABB_tree<Traits> Tree;
 
-typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
+typedef CGAL::Side_of_triangle_mesh<Polyhedron,K> Side_of_triangle_mesh;
 
 namespace mesherCGAL {
 
@@ -108,10 +108,9 @@ namespace mesherCGAL {
         float _cl;
         float _priority;
         Tree* _tree;
-        std::shared_ptr<Point_inside_polyhedron> _pip;
+        std::shared_ptr<Side_of_triangle_mesh> _pip;
         std::shared_ptr<Polyhedron> _ip;
         std::shared_ptr<Exact_polyhedron> _ep;
-        bool has_activity_sphere;
 
         /* If this ever ends up in a scenario where zone is destroyed, switch to unique_ptr and
          * check performance impact */
@@ -133,9 +132,9 @@ namespace mesherCGAL {
                 if (!is_container())
                     return 0;
 
-                int id = (*_pip)(p) ? _id : 0;
+                int id = (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE ? 0 : _id;
 
-                if (id && check_activity_sphere && has_activity_sphere) {
+                if (id && check_activity_sphere && activity_sphere) {
                     Point* centre = activity_sphere->centre;
                     float radius = activity_sphere->r;
                     if (CGAL::squared_distance(*centre, p) > radius * radius)

@@ -26,7 +26,7 @@
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
 // ]A]
-#include <CGAL/Point_inside_polyhedron_3.h>
+#include <CGAL/Side_of_triangle_mesh.h>
 // [C]
 
 #include <sstream>
@@ -131,7 +131,7 @@ typedef std::map< int, std::string > zone_string_map;
 typedef std::map< int, Exact_polyhedron* > zone_ep_map;
 // End [A]
 // [C]
-typedef CGAL::Point_inside_polyhedron_3<Polyhedron,K> Point_inside_polyhedron;
+typedef CGAL::Side_of_triangle_mesh<Polyhedron,K> Side_of_triangle_mesh;
 // End[C]
 
 // Criteria
@@ -167,7 +167,7 @@ bool mesherCGAL::Zone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
 
     _ip = std::make_shared<Polyhedron>();
     poly_copy<Polyhedron,Exact_polyhedron>(_ip, _ep);
-    _pip = std::make_shared<Point_inside_polyhedron>(*_ip);
+    _pip = std::make_shared<Side_of_triangle_mesh>(*_ip);
 
     return true;
 }
@@ -254,8 +254,8 @@ int mesherCGAL::MesherCGAL::setup_regions() {
               priority = 0.0;
           }
 
-          Zone zone(id, cl, priority);
-          _zones.push_back(zone);
+          _zones.push_back(Zone(id, cl, priority));
+          Zone& zone = _zones.back();
 
           if (_settings.zone(i).has_activity() && _settings.zone(i).has_inactivity_index()) {
               double
@@ -344,8 +344,8 @@ int mesherCGAL::MesherCGAL::calculate_bbox() {
           _centre = new Point(((*_bbox_p)[0].x() + (*_bbox_p)[7].x()) / 2,
                              ((*_bbox_p)[0].y() + (*_bbox_p)[7].y()) / 2,
                              ((*_bbox_p)[0].z() + (*_bbox_p)[7].z()) / 2);
-      Point_inside_polyhedron organ_pip(*_region_ips[_settings.organ_index()]);
-      if (!organ_pip(*_centre))
+      Side_of_triangle_mesh organ_pip(*_region_ips[_settings.organ_index()]);
+      if (organ_pip(*_centre) == CGAL::ON_UNBOUNDED_SIDE)
       {
           std::cerr << "ERROR: Centre lies outside organ" << std::endl;
           return 1;
