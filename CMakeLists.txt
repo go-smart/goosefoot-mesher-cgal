@@ -14,7 +14,6 @@ set(External_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
 message(STATUS "Pleae make sure that you have compiled Protobuf and copied libprotobuf.lib, 
 protoc.exe, libprobuf-lite.lib, libprotoc.lib to 
 ${External_DIR}/include/arch/${CMAKE_BUILD_TYPE}/ folder, where arch=Win32 or x64")
-
 if(MSVC)
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 		if(WIN32)

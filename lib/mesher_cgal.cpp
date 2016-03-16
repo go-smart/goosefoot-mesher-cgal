@@ -411,6 +411,21 @@ int mesherCGAL::MesherCGAL::mesh() {
 
   std::cout << " Done" << std::endl;
 
+  std::map< int, int > zone_count;
+  for (C3t3::Cells_in_complex_iterator it = _c3t3.cells_in_complex_begin(); it != _c3t3.cells_in_complex_end(); ++it)
+  {
+      int subId = _c3t3.subdomain_index(it);
+      if (zone_count.find(subId) == zone_count.end())
+          zone_count[subId] = 0;
+      zone_count[subId]++;
+  }
+  for (auto&& pair : zone_count) {
+      int subId = pair.first;
+      if (_settings.tissue_id() == 0)
+          subId--;
+      std::cout << pair.second << " cells with id " << subId << std::endl;
+  }
+
   return 0;
 }
 
