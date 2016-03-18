@@ -77,7 +77,7 @@
 
 #include <CGAL/Simple_cartesian.h>
 
-#include <vtkUnstructuredGridReader.h>
+#include <vtkXMLUnstructuredGridReader.h>
 
 #include <map>
 #include <vector>
@@ -175,7 +175,7 @@ bool mesherCGAL::PolyhedralZone::create_polyhedra(std::shared_ptr<Exact_polyhedr
 }
 
 bool mesherCGAL::UnstructuredGridZone::load(std::string filename) {
-    vtkSmartPointer<vtkUnstructuredGridReader> reader = vtkSmartPointer<vtkUnstructuredGridReader>::New();
+    vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
 
     reader->SetFileName(filename.c_str());
     reader->Update();
@@ -184,7 +184,11 @@ bool mesherCGAL::UnstructuredGridZone::load(std::string filename) {
     return true;
 }
 
-int mesherCGAL::UnstructuredGridZone::contains_all(const K::Point_3&) const {
+bool mesherCGAL::UnstructuredGridZone::contains_all(const K::Point_3& p) const {
+    double x[3] = {p.x(), p.y(), p.z()}, pcoords[3], weights[4];
+    int subId;
+    vtkIdType cid = _grid->FindCell(x, NULL, 0, 1e-10, subId, pcoords, weights);
+    return cid < 0 ? 0 : _id;
 }
 
 int mesherCGAL::MesherCGAL::init() {
@@ -269,8 +273,27 @@ int mesherCGAL::MesherCGAL::setup_regions() {
               priority = 0.0;
           }
 
-          /* In lieu of make_unique in C++14 */
-          _zones.push_back(std::unique_ptr<PolyhedralZone>(new PolyhedralZone(id, cl, priority)));
+          std::string filename = _settings.zone(i).file();
+
+          if (filename.substr(std::max(4, (int)filename.length()) - 4) == std::string(".vtu")) {
+              _zones.push_back(std::unique_ptr<UnstructuredGridZone>(new UnstructuredGridZone(id, cl, priority)));
+              _zones.back()->load(filename);
+          }
+          else {
+              /* In lieu of make_unique in C++14 */
+              _zones.push_back(std::unique_ptr<PolyhedralZone>(new PolyhedralZone(id, cl, priority)));
+              Zone& zone = *_zones.back();
+
+              zone.load(filename);
+
+              std::shared_ptr<Exact_polyhedron> ep;
+              if ((ep = zone.exact_polyhedron())) {
+                  if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
+                      _region_eps[id] = ep;
+
+                  std::cout << id << " (" << ep->size_of_facets() << " facets) " << std::flush;
+              }
+          }
           Zone& zone = *_zones.back();
 
           if (_settings.zone(i).has_activity() && _settings.zone(i).has_inactivity_index()) {
@@ -290,16 +313,6 @@ int mesherCGAL::MesherCGAL::setup_regions() {
               zone.print_activity_sphere();
           }
           std::cout << " ";
-
-          zone.load(_settings.zone(i).file());
-
-          std::shared_ptr<Exact_polyhedron> ep;
-          if ((ep = zone.exact_polyhedron())) {
-              if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
-                  _region_eps[id] = ep;
-
-              std::cout << id << " (" << ep->size_of_facets() << " facets) " << std::flush;
-          }
       }
       std::cout << std::endl;
   }

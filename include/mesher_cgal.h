@@ -133,7 +133,7 @@ namespace mesherCGAL {
                 if (!is_container())
                     return 0;
 
-                int id = contains_all(p);
+                int id = contains_all(p) ? 0 : _id;
 
                 if (id && check_activity_sphere) {
                     int inactivity_index;
@@ -150,7 +150,7 @@ namespace mesherCGAL {
 
         protected:
             /* Ignores inactivity */
-            virtual int contains_all(const K::Point_3& p) const = 0;
+            virtual bool contains_all(const K::Point_3& p) const = 0;
             int outside_activity_sphere(const K::Point_3& p) const {
                 if (activity_sphere) {
                     Point* centre = activity_sphere->centre;
@@ -195,8 +195,8 @@ namespace mesherCGAL {
             bool load(std::string filename);
 
         protected:
-            int contains_all(const K::Point_3& p) const {
-                return (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE ? 0 : _id;
+            bool contains_all(const K::Point_3& p) const {
+                return (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE;
             }
 
         private:
@@ -207,6 +207,7 @@ namespace mesherCGAL {
         vtkSmartPointer<vtkUnstructuredGrid> _grid;
 
         public:
+            UnstructuredGridZone(int id, float cl, float priority) : Zone(id, cl, priority) {}
             bool is_container() const { return true; };
             std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return NULL; };
 
@@ -216,7 +217,7 @@ namespace mesherCGAL {
             bool load(std::string filename);
 
         protected:
-            int contains_all(const K::Point_3& p) const;
+            bool contains_all(const K::Point_3& p) const;
     };
 }
 
