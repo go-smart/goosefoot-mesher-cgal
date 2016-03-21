@@ -57,8 +57,10 @@ static inline double strToDouble(const std::string& s, bool print=false)
 template <class HDS>
 class BuildFromSTL : public CGAL::Modifier_base<HDS>
 {
+  bool _error;
 public:
   BuildFromSTL(std::string filename) : _filename(filename){}
+  bool error() { return _error; }
   void operator()(HDS& hds)
   {
     //std::cout << "Reading surface from " << _filename << std::endl;
@@ -252,6 +254,8 @@ public:
 
     builder.end_surface();
 
+    _error = builder.error();
+
     // TODO: Check name of solid
 
     //std::cout << "Done reading surface" << std::endl;
@@ -269,24 +273,26 @@ bool PolyhedronUtils::_compare_ending(std::string filename, const char* ending)
 }
 
 //-----------------------------------------------------------------------------
-void PolyhedronUtils::readSurfaceFile(std::string filename, Exact_polyhedron& p)
+bool PolyhedronUtils::readSurfaceFile(std::string filename, Exact_polyhedron& p)
 {
+  bool result = false;
   if (_compare_ending(filename, ".stl"))
   {
-    readSTLFile(filename, p);
+    result = readSTLFile(filename, p);
   }
   else if(_compare_ending(filename, ".vtk"))
   {
-    PolyhedronUtils::readVTKFile(filename, p);
+    result = PolyhedronUtils::readVTKFile(filename, p);
   }
   else if(_compare_ending(filename, ".vtp"))
   {
-    PolyhedronUtils::readVTKXMLFile(filename, p);
+    result = PolyhedronUtils::readVTKXMLFile(filename, p);
   }
   else if(_compare_ending(filename, ".off"))
   {
       std::ifstream fileinput(filename.c_str());
       fileinput >> p;
+      return true;
   }
   else
   {
@@ -294,8 +300,10 @@ void PolyhedronUtils::readSurfaceFile(std::string filename, Exact_polyhedron& p)
                  "open file to read 3D surface"
                  "Unknown file type") << std::endl;
   }
+
+  return result;
 }
-void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
+bool PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
 {
     vtkSmartPointer<vtkXMLPolyDataReader> reader =
         vtkSmartPointer<vtkXMLPolyDataReader>::New();
@@ -334,11 +342,13 @@ void PolyhedronUtils::readVTKXMLFile(std::string filename, Exact_polyhedron& p)
     writer->Write();
 #endif
 
-    PolyhedronUtils::readSTLFile(tmpnamebuffer, p);
+    bool result = PolyhedronUtils::readSTLFile(tmpnamebuffer, p);
     remove(tmpnamebuffer);
+
+    return result;
 }
 
-void PolyhedronUtils::readVTKFile(std::string filename, Exact_polyhedron& p)
+bool PolyhedronUtils::readVTKFile(std::string filename, Exact_polyhedron& p)
 {
     vtkSmartPointer<vtkPolyDataReader> reader =
         vtkSmartPointer<vtkPolyDataReader>::New();
@@ -360,14 +370,16 @@ void PolyhedronUtils::readVTKFile(std::string filename, Exact_polyhedron& p)
 #endif
     writer->Write();
 
-    PolyhedronUtils::readSTLFile(tmpname, p);
+    bool result = PolyhedronUtils::readSTLFile(tmpname, p);
     remove(tmpnamebuffer);
+    return result;
 }
 //-----------------------------------------------------------------------------
-void PolyhedronUtils::readSTLFile(std::string filename, Exact_polyhedron& p)
+bool PolyhedronUtils::readSTLFile(std::string filename, Exact_polyhedron& p)
 {
   BuildFromSTL<Exact_HalfedgeDS> stl_builder(filename);
   p.delegate(stl_builder);
+  return !stl_builder.error();
 }
 //-----------------------------------------------------------------------------
 CGAL::Bbox_3 PolyhedronUtils::getBoundingBox(Polyhedron& polyhedron)

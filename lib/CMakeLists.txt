@@ -27,13 +27,15 @@ find_package(Protobuf REQUIRED)
 PROTOBUF_GENERATE_CPP(CGAL_SETTINGS_PROTO_SRC CGAL_SETTINGS_PROTO_HEADER ${PROTOBUF_DIR}/cgalsettings.proto)
 get_filename_component(CGAL_SETTINGS_PROTO_INCLUDE_DIR ${CGAL_SETTINGS_PROTO_HEADER} DIRECTORY)
 
+add_subdirectory(vtkIsoVolume)
+
 message(${CGAL_SETTINGS_PROTO_SRC})
 add_library(numa-mesher-cgal STATIC
     mesher_cgal.cpp
     ${CGAL_SETTINGS_PROTO_SRC}
 )
 target_include_directories(numa-mesher-cgal PUBLIC ${CGAL_SETTINGS_PROTO_INCLUDE_DIR})
-target_link_libraries(numa-mesher-cgal ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} ${PROTOBUF_LIBRARY})
+target_link_libraries(numa-mesher-cgal ${CGAL_LIBRARIES} ${CGAL_3RD_PARTY_LIBRARIES} ${PROTOBUF_LIBRARY} vtkIsoVolume)
 
 if(VTK_LIBRARIES)
   target_link_libraries(numa-mesher-cgal ${VTK_LIBRARIES})

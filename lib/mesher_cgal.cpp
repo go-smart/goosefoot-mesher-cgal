@@ -41,9 +41,12 @@
 #include <vtkSmartPointer.h>
 #include <vtkFloatArray.h>
 #include <vtkIntArray.h>
+#include <vtkCell.h>
 #include <vtkPointData.h>
 #include <vtkUnstructuredGrid.h>
 #include <vtkXMLUnstructuredGridWriter.h>
+
+#include "vtkIsoVolume/vtkIsoVolume.h"
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Mesh_triangulation_3.h>
@@ -78,6 +81,7 @@
 #include <CGAL/Simple_cartesian.h>
 
 #include <vtkXMLUnstructuredGridReader.h>
+#include <vtkXMLPolyDataReader.h>
 
 #include <map>
 #include <vector>
@@ -87,6 +91,10 @@
 #include "write_c3t3_to_gmsh_file.h"
 #include "zone_priority_sorting.h"
 #include "copy_polyhedron.h"
+
+#define VTU_SCALING 0.001
+#define VTU_FIELD "dead"
+#define VTU_MIN_THRESHOLD 0.8
 
 // [B]
 using namespace mesherCGAL;
@@ -158,10 +166,7 @@ void mesherCGAL::Zone::print_activity_sphere() {
 
 bool mesherCGAL::PolyhedralZone::load(std::string filename) {
     std::shared_ptr<Exact_polyhedron> ep = std::make_shared<Exact_polyhedron>();
-    PolyhedronUtils::readSurfaceFile(filename, *ep);
-    create_polyhedra(ep);
-
-    return true;
+    return PolyhedronUtils::readSurfaceFile(filename, *ep) && create_polyhedra(ep);
 }
 
 bool mesherCGAL::PolyhedralZone::create_polyhedra(std::shared_ptr<Exact_polyhedron> ep) {
@@ -174,21 +179,83 @@ bool mesherCGAL::PolyhedralZone::create_polyhedra(std::shared_ptr<Exact_polyhedr
     return true;
 }
 
-bool mesherCGAL::UnstructuredGridZone::load(std::string filename) {
+bool mesherCGAL::VtkUnstructuredGridZone::load(std::string filename) {
     vtkSmartPointer<vtkXMLUnstructuredGridReader> reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
 
     reader->SetFileName(filename.c_str());
     reader->Update();
-    _grid = reader->GetOutput();
+    vtkSmartPointer<vtkUnstructuredGrid> ug = reader->GetOutput();
 
+    vtkSmartPointer<vtkIsoVolume> threshold =
+      vtkSmartPointer<vtkIsoVolume>::New();
+    threshold->SetInput(ug);
+
+    threshold->SetInputArrayToProcess(0, 0, 0, vtkDataObject::FIELD_ASSOCIATION_POINTS, VTU_FIELD);
+    threshold->ThresholdBetween(VTU_MIN_THRESHOLD, 1e6);
+    threshold->Update();
+
+    _grid = dynamic_cast<vtkUnstructuredGrid*>(threshold->GetOutputDataObject(0));
     return true;
 }
 
-bool mesherCGAL::UnstructuredGridZone::contains_all(const K::Point_3& p) const {
-    double x[3] = {p.x(), p.y(), p.z()}, pcoords[3], weights[4];
+// TODO: Make this more flexible when we deprecate command line definition
+bool mesherCGAL::VtkUnstructuredGridZone::contains_all(const K::Point_3& p) const {
+    double x[3] = {VTU_SCALING * p.x(), VTU_SCALING * p.y(), VTU_SCALING * p.z()}, pcoords[3], weights[10];
     int subId;
+
     vtkIdType cid = _grid->FindCell(x, NULL, 0, 1e-10, subId, pcoords, weights);
-    return cid < 0 ? 0 : _id;
+
+    return cid >= 0;
+
+    // FIXME: We assume tets and a few other things that aren't otherwise necessary (or true if using vtkIV)
+    //if (cid < 0)
+    //    return 0;
+
+    //vtkCell* cell = _grid->GetCell(cid);
+    //vtkDataArray* da =_grid->GetPointData()->GetArray(VTU_FIELD);
+
+    //float v = 0;
+    //for (vtkIdType i = 0; i < 4; ++i) {
+    //    pId = cell->GetPointId(i);
+    //    v += weights[i] * da->GetComponent(i, 0);
+    //}
+
+    //return v < VTU_MIN_THRESHOLD ? 0 : _id;
+}
+
+bool mesherCGAL::VtkPolyhedronZone::load(std::string filename) {
+    vtkSmartPointer<vtkXMLPolyDataReader> reader = vtkSmartPointer<vtkXMLPolyDataReader>::New();
+
+    reader->SetFileName(filename.c_str());
+    reader->Update();
+    _poly = reader->GetOutput();
+    _select_enclosed = vtkSmartPointer<vtkSelectEnclosedPoints>::New();
+    _select_enclosed->Initialize(_poly);
+    return true;
+}
+
+// TODO: Make this more flexible when we deprecate command line definition
+bool mesherCGAL::VtkPolyhedronZone::contains_all(const K::Point_3& p) const {
+    double x[3] = {p.x(), p.y(), p.z()};
+
+    int inside = _select_enclosed->IsInsideSurface(x);
+
+    return (bool)inside;
+
+    // FIXME: We assume tets and a few other things that aren't otherwise necessary (or true if using vtkIV)
+    //if (cid < 0)
+    //    return 0;
+
+    //vtkCell* cell = _grid->GetCell(cid);
+    //vtkDataArray* da =_grid->GetPointData()->GetArray(VTU_FIELD);
+
+    //float v = 0;
+    //for (vtkIdType i = 0; i < 4; ++i) {
+    //    pId = cell->GetPointId(i);
+    //    v += weights[i] * da->GetComponent(i, 0);
+    //}
+
+    //return v < VTU_MIN_THRESHOLD ? 0 : _id;
 }
 
 int mesherCGAL::MesherCGAL::init() {
@@ -249,6 +316,7 @@ int mesherCGAL::MesherCGAL::setup_regions() {
       }
       std::cout << std::endl;
   }
+  int vtp_conversion_exceptions = 0;
   if (_settings.zones_size() || _settings.zone_size()) {
       std::cout << " - Zones : " << std::endl << "   \\ ";
       for (int i = 0 ; i < _settings.zone_size() ; i++) {
@@ -276,7 +344,7 @@ int mesherCGAL::MesherCGAL::setup_regions() {
           std::string filename = _settings.zone(i).file();
 
           if (filename.substr(std::max(4, (int)filename.length()) - 4) == std::string(".vtu")) {
-              _zones.push_back(std::unique_ptr<UnstructuredGridZone>(new UnstructuredGridZone(id, cl, priority)));
+              _zones.push_back(std::unique_ptr<VtkUnstructuredGridZone>(new VtkUnstructuredGridZone(id, cl, priority)));
               _zones.back()->load(filename);
           }
           else {
@@ -284,14 +352,28 @@ int mesherCGAL::MesherCGAL::setup_regions() {
               _zones.push_back(std::unique_ptr<PolyhedralZone>(new PolyhedralZone(id, cl, priority)));
               Zone& zone = *_zones.back();
 
-              zone.load(filename);
+              if (!zone.load(filename)) {
+                  if (filename.substr(std::max(4, (int)filename.length()) - 4) == std::string(".vtp")) {
+                      std::cout << "[!!]" << std::endl;
+                      ++vtp_conversion_exceptions;
 
-              std::shared_ptr<Exact_polyhedron> ep;
-              if ((ep = zone.exact_polyhedron())) {
-                  if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
-                      _region_eps[id] = ep;
+                      _zones.pop_back();
+                      _zones.push_back(std::unique_ptr<VtkPolyhedronZone>(new VtkPolyhedronZone(id, cl, priority)));
+                      _zones.back()->load(filename);
+                  }
+                  else {
+                      std::cout << "[INVALID POLYHEDRON ON LOAD]" << std::endl;
+                      std::cerr << "[INVALID POLYHEDRON ON LOAD]" << std::endl;
+                      abort();
+                  }
+              } else {
+                  std::shared_ptr<Exact_polyhedron> ep;
+                  if ((ep = zone.exact_polyhedron())) {
+                      if (_settings.has_mark_zone_boundaries() && _settings.mark_zone_boundaries())
+                          _region_eps[id] = ep;
 
-                  std::cout << id << " (" << ep->size_of_facets() << " facets) " << std::flush;
+                      std::cout << id << " (" << ep->size_of_facets() << " facets) " << std::flush;
+                  }
               }
           }
           Zone& zone = *_zones.back();
@@ -317,6 +399,10 @@ int mesherCGAL::MesherCGAL::setup_regions() {
       std::cout << std::endl;
   }
   std::sort(_zones.begin(), _zones.end(), ZonePrioritySorting());
+
+  if (vtp_conversion_exceptions > 0) {
+      std::cout << vtp_conversion_exceptions << " VTP conversion exception(s) where caught and a VTP (non-CGAL) Zone was used (see [!!] above)" << std::endl;
+  }
 
   Polyhedron inexact_structures_polyhedron, inexact_combined_polyhedron, inexact_boundary_polyhedron;
   Exact_polyhedron exact_structures_polyhedron;

@@ -33,10 +33,10 @@ class PolyhedronUtils
   static bool _compare_ending(std::string filename, const char* ending);
 
 public:
-  static void readSurfaceFile(std::string filename, Exact_polyhedron& p);
-  static void readSTLFile(std::string filename, Exact_polyhedron& p);
-  static void readVTKFile(std::string filename, Exact_polyhedron& p);
-  static void readVTKXMLFile(std::string filename, Exact_polyhedron& p);
+  static bool readSurfaceFile(std::string filename, Exact_polyhedron& p);
+  static bool readSTLFile(std::string filename, Exact_polyhedron& p);
+  static bool readVTKFile(std::string filename, Exact_polyhedron& p);
+  static bool readVTKXMLFile(std::string filename, Exact_polyhedron& p);
   static CGAL::Bbox_3 getBoundingBox(Polyhedron& polyhedron);
   static double getBoundingSphereRadius(Polyhedron& polyhedron);
   static bool has_degenerate_facets(Exact_polyhedron& p, double threshold);

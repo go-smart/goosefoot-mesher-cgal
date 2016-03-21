@@ -58,6 +58,8 @@
 
 #include <vtkSmartPointer.h>
 #include <vtkUnstructuredGrid.h>
+#include <vtkPolyData.h>
+#include <vtkSelectEnclosedPoints.h>
 
 // Domain
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
@@ -133,7 +135,7 @@ namespace mesherCGAL {
                 if (!is_container())
                     return 0;
 
-                int id = contains_all(p) ? 0 : _id;
+                int id = contains_all(p) ? _id : 0;
 
                 if (id && check_activity_sphere) {
                     int inactivity_index;
@@ -147,6 +149,7 @@ namespace mesherCGAL {
             virtual float squared_distance(const K::Point_3& p) const = 0;
             virtual bool add_tree() = 0;
             virtual bool load(std::string filename) = 0;
+            virtual bool is_valid() = 0;
 
         protected:
             /* Ignores inactivity */
@@ -192,22 +195,42 @@ namespace mesherCGAL {
 
                 return true;
             }
+            bool is_valid() { return _ep && _ep->is_valid(); }
             bool load(std::string filename);
 
         protected:
             bool contains_all(const K::Point_3& p) const {
-                return (*_pip)(p) == CGAL::ON_UNBOUNDED_SIDE;
+                return (*_pip)(p) != CGAL::ON_UNBOUNDED_SIDE;
             }
 
         private:
             bool create_polyhedra(std::shared_ptr<Exact_polyhedron> ep);
     };
 
-    class UnstructuredGridZone : public Zone {
+    class VtkUnstructuredGridZone : public Zone {
         vtkSmartPointer<vtkUnstructuredGrid> _grid;
 
         public:
-            UnstructuredGridZone(int id, float cl, float priority) : Zone(id, cl, priority) {}
+            VtkUnstructuredGridZone(int id, float cl, float priority) : Zone(id, cl, priority) {}
+            bool is_container() const { return true; };
+            std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return NULL; };
+
+            bool has_tree() const { return false; };
+            float squared_distance(const K::Point_3&) const { return 0; };
+            bool add_tree() { return false; };
+            bool is_valid() { return true; };
+            bool load(std::string filename);
+
+        protected:
+            bool contains_all(const K::Point_3& p) const;
+    };
+
+    class VtkPolyhedronZone : public Zone {
+        vtkSmartPointer<vtkPolyData> _poly;
+        vtkSmartPointer<vtkSelectEnclosedPoints> _select_enclosed;
+
+        public:
+            VtkPolyhedronZone(int id, float cl, float priority) : Zone(id, cl, priority) {}
             bool is_container() const { return true; };
             std::shared_ptr<Exact_polyhedron> exact_polyhedron() { return NULL; };
 
@@ -215,6 +238,7 @@ namespace mesherCGAL {
             float squared_distance(const K::Point_3&) const { return 0; };
             bool add_tree() { return false; };
             bool load(std::string filename);
+            bool is_valid() { return true; };
 
         protected:
             bool contains_all(const K::Point_3& p) const;
