@@ -45,14 +45,14 @@ namespace mesherCGAL {
         region_ep_map _region_eps;
         FT _bbox_radius;
         Tree *_boundary_tree;
-        Iso_cuboid* _bbox_p;
+        std::unique_ptr<Iso_cuboid> _bbox_p;
         Proximity_domain_field_3<Mesh_domain::R,Mesh_domain::Index>* _pdf;
         Mesh_domain_implicit* _domain;
 
         public:
             MesherCGAL(const CGALSettings& settings) :
                 _settings(settings), _centre(NULL),
-                _boundary_tree(NULL), _bbox_p(NULL), _pdf(NULL),
+                _boundary_tree(NULL), _pdf(NULL),
                 _domain(NULL)
             {}
 

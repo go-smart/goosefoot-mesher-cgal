@@ -454,7 +454,7 @@ int mesherCGAL::MesherCGAL::setup_regions() {
 
 int mesherCGAL::MesherCGAL::calculate_bbox() {
   if (_settings.has_organ_file()) {
-      _bbox_p = new Iso_cuboid(CGAL::bounding_box(_region_ips[_settings.organ_index()]->points_begin(), _region_ips[_settings.organ_index()]->points_end()));
+      _bbox_p = std::unique_ptr<Iso_cuboid>(new Iso_cuboid(CGAL::bounding_box(_region_ips[_settings.organ_index()]->points_begin(), _region_ips[_settings.organ_index()]->points_end())));
       if (_centre == NULL)
           _centre = new Point(((*_bbox_p)[0].x() + (*_bbox_p)[7].x()) / 2,
                              ((*_bbox_p)[0].y() + (*_bbox_p)[7].y()) / 2,
@@ -465,15 +465,24 @@ int mesherCGAL::MesherCGAL::calculate_bbox() {
           std::cerr << "ERROR: Centre lies outside organ" << std::endl;
           return 1;
       }
+      double radius = _settings.bounding_radius();
+      _bbox_p = std::unique_ptr<Iso_cuboid>(new Iso_cuboid(
+          CGAL::max((*_bbox_p)[0].x(), _centre->x() - radius),
+          CGAL::max((*_bbox_p)[0].y(), _centre->y() - radius),
+          CGAL::max((*_bbox_p)[0].z(), _centre->z() - radius),
+          CGAL::min((*_bbox_p)[7].x(), _centre->x() + radius),
+          CGAL::min((*_bbox_p)[7].y(), _centre->y() + radius),
+          CGAL::min((*_bbox_p)[7].z(), _centre->z() + radius)
+      ));
   } else if (_centre != NULL) {
-      _bbox_p = new Iso_cuboid(
+      _bbox_p = std::unique_ptr<Iso_cuboid>(new Iso_cuboid(
           _centre->x() - _settings.bounding_radius(),
           _centre->y() - _settings.bounding_radius(),
           _centre->z() - _settings.bounding_radius(),
           _centre->x() + _settings.bounding_radius(),
           _centre->y() + _settings.bounding_radius(),
           _centre->z() + _settings.bounding_radius()
-      );
+      ));
   } else {
       std::cerr << "ERROR: No centre defined and no organ to guess from" << std::endl;
       return 2;
@@ -605,6 +614,10 @@ int mesherCGAL::MesherCGAL::label_boundaries() {
 int mesherCGAL::MesherCGAL::output() {
   std::cout << "Write to GMSH" << std::endl;
   CGAL::write_c3t3_to_gmsh_file<C3t3,Polyhedron>(_c3t3, _boundary_indices, std::string(_settings.output_prefix()) + ".msh", (_settings.tissue_id() == 0), _settings.number_from_zero());
+
+  std::cout << "Write bitmap of characteristic lengths" << std::endl;
+
+  _pdf->output_characteristic_lengths(std::string("cl.vti"));
 
   std::cout << "Complete" << std::endl;
 
