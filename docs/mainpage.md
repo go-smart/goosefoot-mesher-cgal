@@ -1,0 +1,28 @@
+\mainpage Goosefoot Mesher - CGAL
+
+This open source (GPL) tool is used as a standalone binary in several projects to provide meshing for RFA ablation procedures using CGAL, an advanced tetrahedral meshing suite.
+
+This project is co-funded by: European Commission under grant agreement no. 600641.
+http://www.gosmart-project.eu/
+
+Dependencies
+------------
+
+- CGAL 4.4
+- VTK 5.8
+- CMake
+- Google Protobuf
+
+Installation
+------------
+
+Recommended installation is to create an out-of-source build directory and to call CMake from there. A sample script for doing this is included in the GSSF package (../gssf/third-party/CGAL-4.3/run-cmake.sh). You should then run 'make' and 'make install'.
+
+Running 'mesher_cgal --help' will provide a list of command line flags. For convenience, you may provide these in a Protobuf binary instead (see cgalsettings.proto for the definition of the format) and use the tool 'mesher_cgal.pb'.
+
+Note that linking directly against this binary is prohibited by the GPL, except by GPL-compatibly licensed software.
+
+Documentation
+-------------
+
+Further information on [generating documentation](documentation.md) from the source tree is available.
