@@ -137,10 +137,11 @@ namespace mesherCGAL {
 
                 int id = contains_all(p) ? _id : 0;
 
-                if (id && check_activity_sphere) {
+                if (activity_sphere && (id != 0) && check_activity_sphere) {
                     int inactivity_index;
-                    if ((inactivity_index = outside_activity_sphere(p)) != 0)
+                    if ((inactivity_index = outside_activity_sphere(p)) != 0) {
                         return inactivity_index;
+                    }
                 }
 
                 return id;

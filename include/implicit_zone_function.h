@@ -98,8 +98,9 @@ namespace mesherCGAL {
             }
 
             for (auto&& z : zones_) {
-                if (z->contains(p) != 0) {
-                    zone = z->get_id();
+                int contains = 0;
+                if ((contains = z->contains(p)) != 0) {
+                    zone = contains;
 
                     if (zone > 0 && default_zone_ == 0)
                         zone += 1;

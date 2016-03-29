@@ -390,7 +390,13 @@ int mesherCGAL::MesherCGAL::setup_regions() {
                   z += _centre->z();
               }
               //int inactivity_index = _settings.zone(i).inactivity_index();
-              zone.set_activity_sphere(x, y, z, _settings.zone(i).activity().r(), i);
+              zone.set_activity_sphere(
+                  x,
+                  y,
+                  z,
+                  _settings.zone(i).activity().r(),
+                  _settings.zone(i).inactivity_index()
+              );
               //_zones.push_back(PolyhedralZone(inactivity_index, cl, priority));
               zone.print_activity_sphere();
           }
